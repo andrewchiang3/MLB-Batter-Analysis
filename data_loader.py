@@ -4,13 +4,12 @@ import pandas as pd
 # Enable cache
 pyb.cache.enable()
 
-def load_statcast_data(start_date, end_date, playerid):
+def load_statcast_data(start_date, end_date):
     """Load Statcast data for the given date range with player names"""
     # Load the data
-    data = pyb.statcast_batter(
+    data = pyb.statcast(
         start_dt=start_date.strftime('%Y-%m-%d'), 
         end_dt=end_date.strftime('%Y-%m-%d'),
-        player_id = playerid
     )
     
     # Get player lookup table

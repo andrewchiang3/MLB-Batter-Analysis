@@ -68,3 +68,36 @@ def calculate_zone_batting_average(df):
     grouped = grouped.rename(columns={"zone_x": "plate_x", "zone_z": "plate_z"})
 
     return grouped
+
+def count_at_bats(data):
+    """
+    Count official at-bats (AB) - PA excluding walks, HBP, sac flies, sac bunts, interference.
+    This is what batting average is calculated from.
+    
+    AB = PA - (BB + HBP + SF + SH + Interference)
+    """
+    if len(data) == 0:
+        return 0
+    
+    # Get outcomes only
+    outcomes = data[data['events'].notna()].copy()
+    
+    # Events that do NOT count as official at-bats
+    non_ab_events = [
+        'walk',
+        'hit_by_pitch',
+        'sac_fly',
+        'sac_bunt',
+        'sac_fly_double_play',
+        'sac_bunt_double_play',
+        'catcher_interf',
+        'field_error'  # Reached on error still counts as AB in most contexts
+    ]
+    
+    # Filter out non-AB events
+    at_bat_outcomes = outcomes[~outcomes['events'].isin(non_ab_events)]
+    
+    if 'game_pk' in at_bat_outcomes.columns and 'at_bat_number' in at_bat_outcomes.columns:
+        return at_bat_outcomes.groupby(['game_pk', 'at_bat_number']).ngroups
+    else:
+        return len(at_bat_outcomes)

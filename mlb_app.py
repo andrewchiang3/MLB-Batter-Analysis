@@ -8,6 +8,7 @@ from data_loader import load_statcast_data, load_batting_stats
 from player_bio import player_headshot, player_bio, team_logo, load_stats
 from visualizations import xwOBA_graph, spray_chart, chase_rate, heat_map
 from utils import calculate_zone_batting_average
+from matchup import pitcher_matchup
 
 # App configuration
 st.set_page_config(
@@ -95,7 +96,7 @@ if 'data' not in st.session_state:
                     batting_data = load_batting_stats(start_date, end_date, str(player_name))
                     player_id = batting_data['mlbID'].iloc[0]
                     bio = player_bio(player_id)
-                    data = load_statcast_data(start_date, end_date, player_id)
+                    data = load_statcast_data(start_date, end_date)
                     
                     st.session_state['batting_data'] = batting_data
                     st.session_state['data'] = data
@@ -149,7 +150,6 @@ else:
                     new_data = load_statcast_data(
                         st.session_state['start_date'], 
                         st.session_state['end_date'],
-                        new_player_id
                     )
 
                     bio = player_bio(new_player_id)
@@ -222,7 +222,7 @@ else:
         st.write("---")
 
         # Chase rate
-        col1, col2 = st.columns([1, 1])
+        col1, col2 = st.columns([2, 1])
 
         with col1:
             chase_rate(player_data)
@@ -231,3 +231,9 @@ else:
             zone_avgs = calculate_zone_batting_average(player_data)
             heat_map(zone_avgs)
 
+        st.write("---")
+
+        st.write("### Pitcher vs Batter Matchup Analysis")
+        st.write("Analyze how this batter performs against specific pitchers")
+
+        pitcher_matchup(player_data)
