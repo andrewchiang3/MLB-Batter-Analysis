@@ -6,7 +6,8 @@ from streamlit_searchbox import st_searchbox
 from player_search import search_players, get_player_full_name
 from data_loader import load_statcast_data, load_batting_stats
 from player_bio import player_headshot, player_bio, team_logo, load_stats
-from visualizations import xwOBA_graph, spray_chart
+from visualizations import xwOBA_graph, spray_chart, chase_rate, heat_map
+from utils import calculate_zone_batting_average
 
 # App configuration
 st.set_page_config(
@@ -217,3 +218,16 @@ else:
 
         with col2:
             st.pyplot(spray_chart(player_data))
+
+        st.write("---")
+
+        # Chase rate
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            chase_rate(player_data)
+
+        with col2:
+            zone_avgs = calculate_zone_batting_average(player_data)
+            heat_map(zone_avgs)
+

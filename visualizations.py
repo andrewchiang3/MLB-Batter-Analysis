@@ -1,8 +1,10 @@
 import altair as alt
 import pandas as pd
 import numpy as np
+import streamlit as st
 from scipy import interpolate
 from pybaseball import spraychart
+from utils import categorize_count
 
 def xwOBA_graph(data): 
     """Graph a line chart with PAs rolling with xwOBA
@@ -265,3 +267,216 @@ def spray_chart(data):
     fig = ax.get_figure()
     
     return fig
+
+def chase_rate(df):
+    """Calculates and creates chase rate analysis"""
+    player_data_copy = df.copy()
+    player_data_copy['in_zone'] = player_data_copy['zone'].apply(lambda x: x <= 9 if pd.notna(x) else None)
+
+    # Identify swings
+    swing_descriptions = ['swinging_strike', 'swinging_strike_blocked', 'foul', 'foul_tip', 
+                          'hit_into_play', 'hit_into_play_score', 'hit_into_play_no_out',
+                          'foul_bunt', 'missed_bunt', 'swinging_pitchout']
+    
+    player_data_copy['swung'] = player_data_copy['description'].isin(swing_descriptions)
+    
+    # Create count categories
+    player_data_copy['count_situation'] = player_data_copy.apply(categorize_count, axis=1)
+
+    total_pitches_out = len(player_data_copy[player_data_copy['in_zone'] == False])
+    swings_out = len(player_data_copy[(player_data_copy['in_zone'] == False) & (player_data_copy['swung'] == True)])
+    
+    total_pitches_in = len(player_data_copy[player_data_copy['in_zone'] == True])
+    swings_in = len(player_data_copy[(player_data_copy['in_zone'] == True) & (player_data_copy['swung'] == True)])
+    
+    chase_rate = (swings_out / total_pitches_out * 100) if total_pitches_out > 0 else 0
+    zone_swing_rate = (swings_in / total_pitches_in * 100) if total_pitches_in > 0 else 0
+
+    # Calculate overall chase rates
+    st.write("### Overall Discipline Metrics")
+    
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Chase Rate", f"{chase_rate:.1f}%", 
+                 help="How often batter swings at pitches outside the zone")
+    
+    with col2:
+        st.metric("Zone Swing Rate", f"{zone_swing_rate:.1f}%",
+                 help="How often batter swings at pitches in the zone")
+    
+    with col3:
+        mlb_avg_chase = 28.0
+        delta = chase_rate - mlb_avg_chase
+        st.metric("vs MLB Avg (~28%)", f"{delta:+.1f}%",
+                 delta=f"{delta:.1f}%",
+                 delta_color="inverse")
+        
+    # Chase rate by count situation
+    st.write("---")
+    st.write("### Chase Rate by Count Situation")
+    
+    situations = ['Hitter ahead', 'Pitcher ahead', '2-strike (pressure)']
+    chase_data = []
+    
+    for situation in situations:
+        situation_data = player_data_copy[player_data_copy['count_situation'] == situation]
+        out_zone = situation_data[situation_data['in_zone'] == False]
+        chase_swings = len(out_zone[out_zone['swung'] == True])
+        total_out = len(out_zone)
+        
+        if total_out > 0:
+            rate = chase_swings / total_out * 100
+        else:
+            rate = 0
+        
+        chase_data.append({
+            'Situation': situation,
+            'Chase Rate': rate,
+            'Label': f"{situation}\n({chase_swings}/{total_out})",
+            'Count': f"({chase_swings}/{total_out})"
+        })
+    
+    # Create DataFrame for Altair
+    chart_df = pd.DataFrame(chase_data)
+    
+    # Define colors for each situation
+    color_scale = alt.Scale(
+        domain=['Hitter ahead', 'Pitcher ahead', '2-strike (pressure)'],
+        range=['green', 'orange', 'red']
+    )
+    
+    # Create base bars
+    bars = alt.Chart(chart_df).mark_bar(
+        opacity=0.7,
+        stroke='black',
+        strokeWidth=2
+    ).encode(
+        x=alt.X('Label:N', title=None, axis=alt.Axis(labelAngle=0)),
+        y=alt.Y('Chase Rate:Q', title='Chase Rate (%)', scale=alt.Scale(domain=[0, max(chart_df['Chase Rate']) * 1.2 if len(chart_df) > 0 else 50])),
+        color=alt.Color('Situation:N', scale=color_scale, legend=None)
+    )
+    
+    # Add value labels on bars
+    text = bars.mark_text(
+        align='center',
+        baseline='bottom',
+        dy=-5,
+        fontSize=14,
+        fontWeight='bold'
+    ).encode(
+        text=alt.Text('Chase Rate:Q', format='.1f'),
+        color=alt.value('black')
+    )
+    
+    # Add MLB average line
+    mlb_avg_chase = 28.0
+    rule = alt.Chart(pd.DataFrame({'y': [mlb_avg_chase]})).mark_rule(
+        color='blue',
+        strokeDash=[5, 5],
+        strokeWidth=2
+    ).encode(
+        y='y:Q'
+    )
+    
+    # Add label for the rule
+    rule_label = rule.mark_text(
+        align='right',
+        dx=-5,
+        dy=-5,
+        text='MLB Average (~28%)',
+        fontSize=11,
+        color='blue'
+    )
+    
+    # Combine all layers
+    chart = (bars + text + rule + rule_label).properties(
+        width=600,
+        height=400,
+        title=f'{st.session_state["player_name"]} - Chase Rate by Count Situation'
+    ).configure_axis(
+        grid=True,
+        gridOpacity=0.3
+    ).configure_title(
+        fontSize=14,
+        fontWeight='bold',
+        anchor='start'
+    )
+    
+    st.altair_chart(chart, use_container_width=True)
+
+def heat_map(df):
+    # Detect batting average column name
+    possible_cols = ['batting_avg', 'avg', 'batting_average', 'BA']
+    avg_col = next((col for col in possible_cols if col in df.columns), None)
+
+    if avg_col is None:
+        st.error(f"No batting average column found in DataFrame. Columns: {list(df.columns)}")
+        return
+
+    df = df.copy()
+    df["batting_avg_label"] = df[avg_col].round(3)
+
+    # Create the heatmap with red-blue color scheme (blue = low, red = high)
+    heatmap = alt.Chart(df).mark_rect(stroke='black', strokeWidth=2).encode(
+        x=alt.X("plate_x:O", 
+                title="Horizontal Distance (Catcher Perspective) [ft]",
+                axis=alt.Axis(labelFontSize=14, titleFontSize=14, titleFontWeight='bold')),
+        y=alt.Y("plate_z:O", 
+                title="Vertical Distance (Above Home Plate) [ft]",
+                axis=alt.Axis(labelFontSize=14, titleFontSize=14, titleFontWeight='bold')),
+        color=alt.Color(
+            f"{avg_col}:Q",
+            title="Batting Average",
+            scale=alt.Scale(
+                scheme="redblue",  # Red for high, blue for low
+                domain=[0, 0.5],
+                reverse=True  # Reverse so red is high, blue is low
+            ),
+            legend=alt.Legend(titleFontSize=13, labelFontSize=12, titleFontWeight='bold')
+        ),
+        tooltip=[
+            alt.Tooltip("plate_x:O", title="X Zone"),
+            alt.Tooltip("plate_z:O", title="Z Zone"),
+            alt.Tooltip(f"{avg_col}:Q", title="Batting Average", format=".3f")
+        ]
+    )
+
+    # Add text labels
+    text = alt.Chart(df).mark_text(
+        align="center",
+        baseline="middle",
+        fontSize=18,
+        fontWeight="bold"
+    ).encode(
+        x=alt.X("plate_x:O"),
+        y=alt.Y("plate_z:O"),
+        text=alt.Text("batting_avg_label:Q", format=".3f"),
+        color=alt.condition(
+            f"datum.{avg_col} > 0.25",  # Adjust threshold for text color
+            alt.value("white"),
+            alt.value("black")
+        )
+    )
+
+    # Combine layers and set strike zone proportions
+    chart = (
+        (heatmap + text)
+        .properties(
+            width=450,   # Width for strike zone (17 inches = ~1.4 feet)
+            height=600,  # Height to match typical strike zone ratio
+            title={
+                'text': f"{st.session_state.get('player_name', 'Player')} - Batting Average by Zone",
+                'fontSize': 18,
+                'fontWeight': 'bold',
+                'anchor': 'middle'
+            }
+        )
+        .configure_view(
+            stroke='black',
+            strokeWidth=2,
+            fill='#f9f9f9'
+        )
+    )
+
+    st.altair_chart(chart, use_container_width=False)
