@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
 from streamlit_searchbox import st_searchbox
+from splits import *
 
 # Modules
 from player_search import search_players, get_player_full_name
 from data_loader import load_statcast_data, load_batting_stats
 from player_bio import player_headshot, player_bio, team_logo, load_stats
-from visualizations import xwOBA_graph, spray_chart, chase_rate, heat_map
+from visualizations import *
 from utils import calculate_zone_batting_average
 from matchup import pitcher_matchup
 
@@ -230,6 +231,12 @@ else:
         with col2:
             zone_avgs = calculate_zone_batting_average(player_data)
             heat_map(zone_avgs)
+
+        st.write("---")
+
+        st.write("### Clutch Splits by OPS")
+        clutch_splits = get_clutch_splits(player_data)
+        st.altair_chart(plot_ops_by_split(clutch_splits))
 
         st.write("---")
 

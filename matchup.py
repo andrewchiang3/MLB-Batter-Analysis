@@ -150,6 +150,7 @@ def pitcher_matchup(player_data):
                 st.info("No outs in this matchup yet")
 
     st.write("### At-Bat History")
+    st.write('**See pitch sequences for each at-bat**')
 
     # Get unique at-bats
     at_bat_groups = matchup_data.groupby(['game_pk', 'at_bat_number'])

@@ -313,7 +313,6 @@ def chase_rate(df):
                  delta_color="inverse")
         
     # Chase rate by count situation
-    st.write("---")
     st.write("### Chase Rate by Count Situation")
     
     situations = ['Hitter ahead', 'Pitcher ahead', '2-strike (pressure)']
@@ -417,12 +416,19 @@ def heat_map(df):
     df = df.copy()
     df["batting_avg_label"] = df[avg_col].round(3)
 
+    # Define explicit category orders so the zone grid maps correctly to visual rows/cols
+    # Adjust these lists if your data uses different category names
+    x_order = ['Left', 'Middle', 'Right']
+    y_order = ['High', 'Mid', 'Low']   # top -> bottom: High, Mid, Low
+
     # Create the heatmap with red-blue color scheme (blue = low, red = high)
     heatmap = alt.Chart(df).mark_rect(stroke='black', strokeWidth=2).encode(
-        x=alt.X("plate_x:O", 
+        x=alt.X("plate_x:O",
+                sort=x_order,
                 title="Horizontal Distance (Catcher Perspective) [ft]",
                 axis=alt.Axis(labelFontSize=14, titleFontSize=14, titleFontWeight='bold')),
-        y=alt.Y("plate_z:O", 
+        y=alt.Y("plate_z:O",
+                sort=y_order,
                 title="Vertical Distance (Above Home Plate) [ft]",
                 axis=alt.Axis(labelFontSize=14, titleFontSize=14, titleFontWeight='bold')),
         color=alt.Color(
@@ -442,15 +448,15 @@ def heat_map(df):
         ]
     )
 
-    # Add text labels
+    # Add text labels using the same ordering
     text = alt.Chart(df).mark_text(
         align="center",
         baseline="middle",
         fontSize=18,
         fontWeight="bold"
     ).encode(
-        x=alt.X("plate_x:O"),
-        y=alt.Y("plate_z:O"),
+        x=alt.X("plate_x:O", sort=x_order),
+        y=alt.Y("plate_z:O", sort=y_order),
         text=alt.Text("batting_avg_label:Q", format=".3f"),
         color=alt.condition(
             f"datum.{avg_col} > 0.25",  # Adjust threshold for text color
@@ -480,3 +486,24 @@ def heat_map(df):
     )
 
     st.altair_chart(chart, use_container_width=False)
+
+
+def plot_ops_by_split(df, stat='OPS', title='OPS by Split'):
+    chart = (
+        alt.Chart(df)
+        .mark_bar(color='#1f77b4')
+        .encode(
+            x=alt.X('Split:N', sort='-y', title=''),
+            y=alt.Y(f'{stat}:Q', title=stat),
+            tooltip=['Split', 'BA', 'OBP', 'SLG', 'OPS']
+        )
+        .properties(
+            title=title,
+            width=500,
+            height=300
+        )
+    )
+    return chart
+
+
+
