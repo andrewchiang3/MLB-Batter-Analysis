@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from streamlit_searchbox import st_searchbox
-from splits import *
+
 
 # Modules
 from player_search import search_players, get_player_full_name
@@ -10,6 +10,7 @@ from player_bio import player_headshot, player_bio, team_logo, load_stats
 from visualizations import *
 from utils import calculate_zone_batting_average
 from matchup import pitcher_matchup
+from splits import *
 
 # App configuration
 st.set_page_config(
@@ -234,9 +235,17 @@ else:
 
         st.write("---")
 
-        st.write("### Clutch Splits by OPS")
-        clutch_splits = get_clutch_splits(player_data)
-        st.altair_chart(plot_ops_by_split(clutch_splits))
+        # splits visualizations
+        col1, col2 = st.columns([1, 1])
+        platoon_df = get_platoon_splits(player_data)
+
+        with col1:
+            st.write("### Clutch Splits by OPS")
+            clutch_splits = get_clutch_splits(player_data)
+            st.altair_chart(plot_ops_by_split(clutch_splits))
+
+        with col2:
+            st.altair_chart(create_platoon_radar_chart(platoon_df))
 
         st.write("---")
 
@@ -244,3 +253,4 @@ else:
         st.write("Analyze how this batter performs against specific pitchers")
 
         pitcher_matchup(player_data)
+
