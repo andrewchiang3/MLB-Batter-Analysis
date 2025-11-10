@@ -38,7 +38,7 @@ def is_mobile():
 
 # App configuration
 st.set_page_config(
-    page_title = "MLB",
+    page_title = "MLB Batter Analysis",
     layout = 'wide'
 )
 
@@ -81,15 +81,27 @@ if 'mobile' in query_params:
     st.session_state['force_mobile'] = query_params['mobile'].lower() == 'true'
 
 # Main page layout
-st.title("MLB Batter Analysis")
-st.write("Performance metrics for MLB players")
+st.markdown("<h1 style='text-align: center;'>MLB Batter Analysis</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<p style='text-align: center; color: gray; font-size: 14px;'>"
+    "Analyze MLB player performance with Statcast data (2015-present). "
+    "View rolling stats, spray charts, chase rates, situational splits, "
+    "zone heatmaps, and pitcher matchup history."
+    "</p>",
+    unsafe_allow_html=True
+)
 
 # Check if data is loaded
 if 'data' not in st.session_state:
     # Main page when no data is loaded
     st.markdown("---")
-    st.subheader("Get Started")
-    st.info("**Statcast data available from 2015-present** • Select a player and date range to begin analysis")
+    st.markdown("<h3 style='text-align: center;'>Get Started</h1>", unsafe_allow_html=True)
+    st.markdown(
+    "<p style='text-align: center; color: gray; font-size: 14px;'>"
+    "Statcast data available from 2015-present, select a player and date range to begin analysis"
+    "</p>",
+    unsafe_allow_html=True
+)
 
     # Initialize search term in session state to prevent reset
     if 'search_term' not in st.session_state:
