@@ -11,6 +11,7 @@ from visualizations import *
 from utils import calculate_zone_batting_average
 from matchup import pitcher_matchup
 from splits import *
+from splits_visualizations import *
 
 # App configuration
 st.set_page_config(
@@ -247,10 +248,21 @@ else:
         with col2:
             st.altair_chart(create_platoon_radar_chart(platoon_df))
 
+        col1, col2 = st.columns([2, 1])
+        splits_df = get_count_splits(player_data)
+        ballpark_df = get_ballpark_splits(player_data)
+
+        with col1:
+            st.altair_chart(create_count_heatmap(splits_df))
+
+        with col2:
+            display_best_ballpark(ballpark_df)
+
         st.write("---")
 
         st.write("### Pitcher vs Batter Matchup Analysis")
         st.write("Analyze how this batter performs against specific pitchers")
 
         pitcher_matchup(player_data)
-
+        
+        st.dataframe(get_count_splits(player_data))

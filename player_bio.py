@@ -127,7 +127,8 @@ def load_stats(batting_data):
             st.metric(
                 "PA",
                 batting_data['PA'],
-                width="content"
+                width="content",
+                help="Plate Appearances"
             )
 
         # AB and R
@@ -137,14 +138,16 @@ def load_stats(batting_data):
             st.metric(
                 "AB",
                 batting_data['AB'],
-                width="content"
+                width="content",
+                help="At-bats"
             )
         
         with cols[1]:
             st.metric(
                 "R",
                 batting_data['R'],
-                width="content"
+                width="content",
+                help="Runs"
             )
 
         # H and 2B
@@ -154,14 +157,16 @@ def load_stats(batting_data):
             st.metric(
                 "Hits",
                 batting_data['H'],
-                width="content"
+                width="content",
+                help="Hits"
             )
         
         with cols[1]:
             st.metric(
                 "2B",
                 batting_data['2B'],
-                width="content"
+                width="content",
+                help="Doubles"
             )
 
         # H and 2B
@@ -171,14 +176,16 @@ def load_stats(batting_data):
             st.metric(
                 "3B",
                 batting_data['3B'],
-                width="content"
+                width="content",
+                help="Triples"
             )
         
         with cols[1]:
             st.metric(
                 "HR",
                 batting_data['HR'],
-                width="content"
+                width="content",
+                help="Home runs"
             )
 
         # RBI and BB
@@ -188,14 +195,16 @@ def load_stats(batting_data):
             st.metric(
                 "RBIs",
                 batting_data['RBI'],
-                width="content"
+                width="content",
+                help="Runs batted in"
             )
         
         with cols[1]:
             st.metric(
                 "BB + IBB",
                 batting_data['BB'] + batting_data['IBB'],
-                width="content"
+                width="content",
+                help="Walks + Intentional walks"
             )
 
         # HBP and SO
@@ -205,14 +214,16 @@ def load_stats(batting_data):
             st.metric(
                 "HBP",
                 batting_data['HBP'],
-                width="content"
+                width="content",
+                help="Hit by pitch"
             )
         
         with cols[1]:
             st.metric(
                 "SO",
                 batting_data['SO'],
-                width="content"
+                width="content",
+                help="Strikeouts"
             )
 
         # SB and CS
@@ -222,14 +233,16 @@ def load_stats(batting_data):
             st.metric(
                 "SB",
                 batting_data['SB'],
-                width="content"
+                width="content",
+                help="Stolen bases"
             )
         
         with cols[1]:
             st.metric(
                 "CS",
                 batting_data['CS'],
-                width="content"
+                width="content",
+                help="Caught stealing"
             )
 
         # Avg and obp
@@ -239,14 +252,16 @@ def load_stats(batting_data):
             st.metric(
                 "AVG",
                 batting_data['BA'],
-                width="content"
+                width="content",
+                help="Batting average"
             )
         
         with cols[1]:
             st.metric(
                 "OBP",
                 batting_data['OBP'],
-                width="content"
+                width="content",
+                help = "On-base percentage"
             )
 
         # H and 2B
@@ -256,12 +271,14 @@ def load_stats(batting_data):
             st.metric(
                 "SLG",
                 batting_data['SLG'],
-                width="content"
+                width="content",
+                help="Slugging"
             )
         
         with cols[1]:
             st.metric(
                 "OPS",
                 batting_data['OPS'],
-                width="content"
+                width="content",
+                help="On-base + Slugging"
             )

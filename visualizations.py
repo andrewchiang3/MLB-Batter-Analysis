@@ -6,11 +6,13 @@ from scipy import interpolate
 from pybaseball import spraychart
 from utils import categorize_count
 
-def xwOBA_graph(data): 
+def xwOBA_graph(data, max_rolling=100): 
     """Graph a line chart with PAs rolling with xwOBA
     
     data:
         statcast batting data for a specified date and player
+    max_rolling:
+        maximum rolling window size (default 100, adjusts if fewer PAs available)
     """ 
     contact_events = ['single', 'double', 'triple', 'home_run', 
                     'field_out', 'grounded_into_double_play', 
@@ -29,16 +31,25 @@ def xwOBA_graph(data):
         axis=1
     )
 
+    # Determine actual rolling window based on available data
+    total_pas = len(valid_pa)
+    actual_rolling = min(max_rolling, total_pas)
+    min_periods = max(10, int(actual_rolling * 0.2))  # At least 10 or 20% of window
+    
     # PRE-CALCULATE rolling average on the FULL dataset
-    valid_pa['rolling_xwoba'] = valid_pa['xwoba_value'].rolling(window=100, min_periods=20).mean()
+    valid_pa['rolling_xwoba'] = valid_pa['xwoba_value'].rolling(
+        window=actual_rolling, 
+        min_periods=min_periods
+    ).mean()
 
-    # Get overall xwOBA and last PA date
+    # Get overall xwOBA
     xwoba = valid_pa['xwoba_value'].mean()
 
-    # Get the most recent 100 PAs
-    recent_100 = valid_pa.tail(100).copy()
-    recent_100 = recent_100.reset_index(drop=True)
-    recent_100['pa_number'] = range(len(recent_100))
+    # Get the most recent PAs (up to max_rolling)
+    num_recent = min(actual_rolling, total_pas)
+    recent_pas = valid_pa.tail(num_recent).copy()
+    recent_pas = recent_pas.reset_index(drop=True)
+    recent_pas['pa_number'] = range(len(recent_pas))
     
     # Format the date for each PA with ordinal suffix
     def format_date_with_ordinal(d):
@@ -49,20 +60,20 @@ def xwOBA_graph(data):
             suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
         return d.strftime(f'%b {day}{suffix}')
     
-    recent_100['formatted_date'] = recent_100['game_date'].apply(format_date_with_ordinal)
+    recent_pas['formatted_date'] = recent_pas['game_date'].apply(format_date_with_ordinal)
     
     # Format xwOBA display value (e.g., ".489")
-    recent_100['xwoba_display'] = recent_100['rolling_xwoba'].apply(
+    recent_pas['xwoba_display'] = recent_pas['rolling_xwoba'].apply(
         lambda x: f'.{int(x*1000):03d}' if pd.notna(x) else ''
     )
     
     # Create combined text for better centering
-    recent_100['xwoba_line'] = 'xwOBA: ' + recent_100['xwoba_display']
-    recent_100['date_line'] = 'Last PA: ' + recent_100['formatted_date']
+    recent_pas['xwoba_line'] = 'xwOBA: ' + recent_pas['xwoba_display']
+    recent_pas['date_line'] = 'Last PA: ' + recent_pas['formatted_date']
 
     # Create DENSELY interpolated data for ultra-smooth tracking
-    pa_numbers = recent_100['pa_number'].values
-    rolling_xwoba_values = recent_100['rolling_xwoba'].values
+    pa_numbers = recent_pas['pa_number'].values
+    rolling_xwoba_values = recent_pas['rolling_xwoba'].values
     
     # Remove any NaN values for interpolation
     valid_mask = ~np.isnan(rolling_xwoba_values)
@@ -87,16 +98,16 @@ def xwOBA_graph(data):
                 'pa_number': pa,
                 'rolling_xwoba': xwoba_val,
                 'original_pa': int(pa_numbers[nearest_idx]),
-                'formatted_date': recent_100.iloc[nearest_idx]['formatted_date'],
-                'xwoba_display': recent_100.iloc[nearest_idx]['xwoba_display'],
-                'xwoba_line': recent_100.iloc[nearest_idx]['xwoba_line'],
-                'date_line': recent_100.iloc[nearest_idx]['date_line']
+                'formatted_date': recent_pas.iloc[nearest_idx]['formatted_date'],
+                'xwoba_display': recent_pas.iloc[nearest_idx]['xwoba_display'],
+                'xwoba_line': recent_pas.iloc[nearest_idx]['xwoba_line'],
+                'date_line': recent_pas.iloc[nearest_idx]['date_line']
             })
         
         interpolated_df = pd.DataFrame(interpolated_data)
     else:
         # Fallback if not enough points
-        interpolated_df = recent_100.copy()
+        interpolated_df = recent_pas.copy()
 
     # Create a selection based on mouse x position
     mouse_selection = alt.selection_point(
@@ -108,7 +119,7 @@ def xwOBA_graph(data):
     )
 
     # Create the main line chart
-    line_chart = alt.Chart(recent_100).mark_line(
+    line_chart = alt.Chart(recent_pas).mark_line(
         size=3,
         color='#e53935',
         interpolate='monotone',
@@ -116,7 +127,7 @@ def xwOBA_graph(data):
     ).encode(
         x=alt.X('pa_number:Q', 
                 title=None,
-                scale=alt.Scale(domain=[0, len(recent_100)-1]),
+                scale=alt.Scale(domain=[0, len(recent_pas)-1]),
                 axis=alt.Axis(
                     grid=False,
                     domain=False,
@@ -144,7 +155,7 @@ def xwOBA_graph(data):
         opacity=0,
         size=2
     ).encode(
-        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, len(recent_100)-1])),
+        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, len(recent_pas)-1])),
         tooltip=alt.value(None)
     ).add_params(mouse_selection)
 
@@ -154,13 +165,13 @@ def xwOBA_graph(data):
         filled=True,
         color='#e53935'
     ).encode(
-        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, len(recent_100)-1])),
+        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, len(recent_pas)-1])),
         y=alt.Y('rolling_xwoba:Q'),
         opacity=alt.condition(mouse_selection, alt.value(1), alt.value(0)),
         tooltip=alt.value(None)
     ).transform_filter(mouse_selection)
 
-    # Info box background - slightly taller to accommodate text better
+    # Info box background
     info_box = alt.Chart(interpolated_df).mark_rect(
         color='#f5f5f5',
         opacity=0.95,
@@ -168,16 +179,16 @@ def xwOBA_graph(data):
         strokeWidth=1.5,
         cornerRadius=2
     ).encode(
-        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, len(recent_100)-1])),
+        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, len(recent_pas)-1])),
         y=alt.Y('rolling_xwoba:Q'),
         opacity=alt.condition(mouse_selection, alt.value(0.95), alt.value(0))
     ).transform_calculate(
-        box_left='datum.pa_number - 8',    # Slightly wider
+        box_left='datum.pa_number - 8',
         box_right='datum.pa_number + 8',
-        box_top='datum.rolling_xwoba - 0.012',     # Closer to dot
-        box_bottom='datum.rolling_xwoba - 0.072'   # Taller box
+        box_top='datum.rolling_xwoba - 0.012',
+        box_bottom='datum.rolling_xwoba - 0.072'
     ).encode(
-        x=alt.X('box_left:Q', scale=alt.Scale(domain=[0, len(recent_100)-1])),
+        x=alt.X('box_left:Q', scale=alt.Scale(domain=[0, len(recent_pas)-1])),
         x2=alt.X2('box_right:Q'),
         y=alt.Y('box_top:Q'),
         y2=alt.Y2('box_bottom:Q')
@@ -187,12 +198,12 @@ def xwOBA_graph(data):
     xwoba_text_line = alt.Chart(interpolated_df).mark_text(
         align='center',
         dx=0,
-        dy=27,      # Positioned in upper portion of box
+        dy=27,
         fontSize=11,
         fontWeight='normal',
         color='#333333'
     ).encode(
-        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, len(recent_100)-1])),
+        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, len(recent_pas)-1])),
         y='rolling_xwoba:Q',
         text=alt.condition(mouse_selection, alt.Text('xwoba_line:N'), alt.value(' ')),
         opacity=alt.condition(mouse_selection, alt.value(1), alt.value(0))
@@ -202,12 +213,12 @@ def xwOBA_graph(data):
     date_text_line = alt.Chart(interpolated_df).mark_text(
         align='center',
         dx=0,
-        dy=41,      # Positioned in lower portion of box
+        dy=41,
         fontSize=11,
         fontWeight='normal',
         color='#666666'
     ).encode(
-        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, len(recent_100)-1])),
+        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, len(recent_pas)-1])),
         y='rolling_xwoba:Q',
         text=alt.condition(mouse_selection, 'date_line:N', alt.value(' ')),
         opacity=alt.condition(mouse_selection, alt.value(1), alt.value(0))
@@ -225,7 +236,7 @@ def xwOBA_graph(data):
 
     # Add "LG AVG" text label
     league_avg_text = alt.Chart(pd.DataFrame({
-        'x': [len(recent_100) - 1], 
+        'x': [len(recent_pas) - 1], 
         'y': [0.312], 
         'text': ['LG AVG']
     })).mark_text(
@@ -486,411 +497,3 @@ def heat_map(df):
     )
 
     st.altair_chart(chart, use_container_width=False)
-
-
-def plot_ops_by_split(df, stat='OPS', title='OPS by Split'):
-    """
-    Create a horizontal bar chart for splits statistics
-    
-    Parameters:
-    -----------
-    df : DataFrame
-        DataFrame with splits data
-    stat : str
-        The statistic to display (default: 'OPS')
-    title : str
-        Chart title
-    
-    Returns:
-    --------
-    alt.Chart
-        Altair horizontal bar chart
-    """
-    
-    # Calculate min and max for better color scaling
-    stat_min = df[stat].min()
-    stat_max = df[stat].max()
-    stat_range = stat_max - stat_min
-    
-    # Set color domain based on actual data range with some padding
-    color_min = max(0, stat_min - stat_range * 0.1)
-    color_max = stat_max + stat_range * 0.1
-    
-    # Determine color based on stat value (green for good, red for bad)
-    chart = (
-        alt.Chart(df)
-        .mark_bar()
-        .encode(
-            # Y-axis for categories (horizontal bars)
-            y=alt.Y('Split:N', 
-                   sort='-x',  # Sort by the stat value
-                   title=None,  # Remove axis title for cleaner look
-                   axis=alt.Axis(
-                       labelLimit=200,  # Allow longer labels
-                       labelOverlap=False  # Force all labels to show
-                   )),
-            
-            # X-axis for the statistic
-            x=alt.X(f'{stat}:Q', 
-                   title=stat,
-                   scale=alt.Scale(domain=[0, stat_max * 1.1])),  # Add padding
-            
-            # Color bars based on performance (conditional coloring)
-            color=alt.Color(f'{stat}:Q',
-                          scale=alt.Scale(
-                              scheme='redyellowgreen',
-                              domain=[color_min, color_max],
-                              clamp=True  # Clamp values to prevent black
-                          ),
-                          legend=None),  # Hide legend since color is intuitive
-            
-            # Enhanced tooltip
-            tooltip=[
-                alt.Tooltip('Split:N', title='Split'),
-                alt.Tooltip('BA:Q', title='AVG', format='.3f'),
-                alt.Tooltip('OBP:Q', title='OBP', format='.3f'),
-                alt.Tooltip('SLG:Q', title='SLG', format='.3f'),
-                alt.Tooltip('OPS:Q', title='OPS', format='.3f')
-            ]
-        )
-        .properties(
-            title={
-                "text": title,
-                "fontSize": 16,
-                "fontWeight": "bold"
-            },
-            width=600,
-            height=max(300, len(df) * 30)  # Dynamic height based on number of splits
-        )
-    )
-    
-    # Add value labels at the end of each bar for easy reading
-    text = (
-        alt.Chart(df)
-        .mark_text(
-            align='left',
-            dx=5,  # Offset from bar end
-            fontSize=11,
-            fontWeight='bold',
-            color='black'  # Force black color so it's always visible
-        )
-        .encode(
-            y=alt.Y('Split:N', sort='-x'),
-            x=alt.X(f'{stat}:Q'),
-            text=alt.Text(f'{stat}:Q', format='.3f')
-        )
-    )
-    
-    return (chart + text).configure_view(
-        strokeWidth=0
-    ).configure_axis(
-        labelFontSize=11,
-        titleFontSize=13
-    )
-
-
-def create_platoon_radar_chart(platoon_df):
-    """
-    Create a radar/spider chart comparing platoon splits (vs LHP and vs RHP)
-    Uses cartesian coordinates (x, y) instead of polar (theta, radius)
-    
-    Parameters:
-    -----------
-    platoon_df : DataFrame
-        DataFrame with platoon splits containing columns: Split, BA, OBP, SLG, OPS
-    
-    Returns:
-    --------
-    alt.Chart
-        Altair radar chart
-    """
-    
-    # Define the metrics to show
-    metrics = ['BA', 'OBP', 'SLG', 'OPS']
-    metric_labels = ['AVG', 'OBP', 'SLG', 'OPS']
-    
-    # Prepare data for radar chart
-    radar_data = []
-    
-    for _, row in platoon_df.iterrows():
-        split_name = row['Split']
-        
-        for i, (metric, label) in enumerate(zip(metrics, metric_labels)):
-            value = row[metric]
-            
-            # Normalize to 0-1 scale
-            if metric == 'OPS':
-                normalized = value / 2.0
-            else:
-                normalized = value
-            
-            # Calculate angle for this metric
-            angle = (i / len(metrics)) * 2 * np.pi - np.pi / 2  # Start from top
-            
-            # Convert polar to cartesian
-            x = normalized * np.cos(angle)
-            y = normalized * np.sin(angle)
-            
-            radar_data.append({
-                'metric': label,
-                'value': normalized,
-                'actual_value': value,
-                'split': split_name,
-                'x': x,
-                'y': y,
-                'order': i
-            })
-    
-    radar_df = pd.DataFrame(radar_data)
-    
-    # Add closing point to complete the polygon
-    closing_data = []
-    for split in radar_df['split'].unique():
-        first_point = radar_df[radar_df['split'] == split].iloc[0].copy()
-        first_point['order'] = len(metrics)
-        closing_data.append(first_point)
-    
-    radar_df = pd.concat([radar_df, pd.DataFrame(closing_data)], ignore_index=True)
-    radar_df = radar_df.sort_values(['split', 'order'])
-    
-    # Create guide circles
-    guide_data = []
-    angles = np.linspace(0, 2 * np.pi, 100)
-    for r in [0.2, 0.4, 0.6, 0.8, 1.0]:
-        for angle in angles:
-            guide_data.append({
-                'x': r * np.cos(angle),
-                'y': r * np.sin(angle),
-                'level': r
-            })
-    
-    guides = alt.Chart(pd.DataFrame(guide_data)).mark_line(
-        strokeDash=[2, 2],
-        opacity=0.3,
-        color='gray',
-        strokeWidth=1
-    ).encode(
-        x=alt.X('x:Q', scale=alt.Scale(domain=[-1.2, 1.2]), axis=None),
-        y=alt.Y('y:Q', scale=alt.Scale(domain=[-1.2, 1.2]), axis=None),
-        detail='level:N'
-    )
-    
-    # Create axis lines from center
-    axis_data = []
-    for i, label in enumerate(metric_labels):
-        angle = (i / len(metric_labels)) * 2 * np.pi - np.pi / 2
-        axis_data.append({
-            'x': 0,
-            'y': 0,
-            'x2': np.cos(angle),
-            'y2': np.sin(angle),
-            'metric': label
-        })
-    
-    axes = alt.Chart(pd.DataFrame(axis_data)).mark_line(
-        opacity=0.3,
-        color='gray',
-        strokeWidth=1
-    ).encode(
-        x=alt.X('x:Q'),
-        y=alt.Y('y:Q'),
-        x2='x2:Q',
-        y2='y2:Q'
-    )
-    
-    # Data polygon (filled area)
-    area = alt.Chart(radar_df).mark_line(
-        opacity=0.2,
-        interpolate='linear-closed',
-        filled=True
-    ).encode(
-        x=alt.X('x:Q'),
-        y=alt.Y('y:Q'),
-        color=alt.Color('split:N',
-                       scale=alt.Scale(domain=['vs LHP', 'vs RHP'],
-                                     range=['#FF6B6B', '#4ECDC4']),
-                       legend=alt.Legend(title='Platoon Split')),
-        order='order:O',
-        detail='split:N'
-    )
-    
-    # Data lines
-    line = alt.Chart(radar_df).mark_line(
-        strokeWidth=3,
-        interpolate='linear-closed'
-    ).encode(
-        x=alt.X('x:Q'),
-        y=alt.Y('y:Q'),
-        color=alt.Color('split:N',
-                       scale=alt.Scale(domain=['vs LHP', 'vs RHP'],
-                                     range=['#FF6B6B', '#4ECDC4'])),
-        order='order:O',
-        detail='split:N'
-    )
-    
-    # Data points
-    points = alt.Chart(radar_df[radar_df['order'] < len(metrics)]).mark_circle(
-        size=100,
-        opacity=1
-    ).encode(
-        x=alt.X('x:Q'),
-        y=alt.Y('y:Q'),
-        color=alt.Color('split:N',
-                       scale=alt.Scale(domain=['vs LHP', 'vs RHP'],
-                                     range=['#FF6B6B', '#4ECDC4'])),
-        tooltip=[
-            alt.Tooltip('split:N', title='Split'),
-            alt.Tooltip('metric:N', title='Metric'),
-            alt.Tooltip('actual_value:Q', title='Value', format='.3f')
-        ]
-    )
-    
-    # Metric labels
-    label_data = []
-    for i, label in enumerate(metric_labels):
-        angle = (i / len(metric_labels)) * 2 * np.pi - np.pi / 2
-        label_data.append({
-            'metric': label,
-            'x': 1.15 * np.cos(angle),
-            'y': 1.15 * np.sin(angle)
-        })
-    
-    labels = alt.Chart(pd.DataFrame(label_data)).mark_text(
-        fontSize=14,
-        fontWeight='bold'
-    ).encode(
-        x=alt.X('x:Q'),
-        y=alt.Y('y:Q'),
-        text='metric:N'
-    )
-    
-    # Combine all layers
-    chart = (guides + axes + area + line + points + labels).properties(
-        width=500,
-        height=500,
-        title='Platoon Splits Comparison'
-    ).configure_view(
-        strokeWidth=0
-    ).configure_axis(
-        grid=False
-    )
-    
-    return chart
-
-
-def create_simple_platoon_radar(platoon_df):
-    """
-    Simplified radar chart for platoon splits
-    
-    Parameters:
-    -----------
-    platoon_df : DataFrame
-        DataFrame with platoon splits containing columns: Split, BA, OBP, SLG, OPS
-    
-    Returns:
-    --------
-    alt.Chart
-        Altair radar chart
-    """
-    metrics = ['BA', 'OBP', 'SLG', 'OPS']
-    metric_labels = ['AVG', 'OBP', 'SLG', 'OPS']
-    
-    # Reshape data with cartesian coordinates
-    data = []
-    for _, row in platoon_df.iterrows():
-        for i, (label, col) in enumerate(zip(metric_labels, metrics)):
-            # Normalize OPS
-            value = row[col] / 2.0 if col == 'OPS' else row[col]
-            
-            # Calculate angle
-            angle = (i / len(metrics)) * 2 * np.pi - np.pi / 2
-            
-            # Convert to cartesian
-            x = value * np.cos(angle)
-            y = value * np.sin(angle)
-            
-            data.append({
-                'Metric': label,
-                'Value': value,
-                'Split': row['Split'],
-                'Display': f"{row[col]:.3f}",
-                'x': x,
-                'y': y,
-                'order': i
-            })
-    
-    chart_df = pd.DataFrame(data)
-    
-    # Add closing points
-    closing_data = []
-    for split in chart_df['Split'].unique():
-        first_point = chart_df[chart_df['Split'] == split].iloc[0].copy()
-        first_point['order'] = len(metrics)
-        closing_data.append(first_point)
-    
-    chart_df = pd.concat([chart_df, pd.DataFrame(closing_data)], ignore_index=True)
-    chart_df = chart_df.sort_values(['Split', 'order'])
-    
-    # Area
-    area = alt.Chart(chart_df).mark_line(
-        opacity=0.2,
-        interpolate='linear-closed',
-        filled=True
-    ).encode(
-        x=alt.X('x:Q', scale=alt.Scale(domain=[-1.1, 1.1]), axis=None),
-        y=alt.Y('y:Q', scale=alt.Scale(domain=[-1.1, 1.1]), axis=None),
-        color=alt.Color('Split:N', scale=alt.Scale(scheme='set2')),
-        order='order:O',
-        detail='Split:N'
-    )
-    
-    # Lines
-    line = alt.Chart(chart_df).mark_line(
-        strokeWidth=3,
-        interpolate='linear-closed'
-    ).encode(
-        x=alt.X('x:Q'),
-        y=alt.Y('y:Q'),
-        color=alt.Color('Split:N', scale=alt.Scale(scheme='set2')),
-        order='order:O',
-        detail='Split:N'
-    )
-    
-    # Points
-    points = alt.Chart(chart_df[chart_df['order'] < len(metrics)]).mark_circle(
-        size=100
-    ).encode(
-        x=alt.X('x:Q'),
-        y=alt.Y('y:Q'),
-        color=alt.Color('Split:N', 
-                       scale=alt.Scale(scheme='set2'),
-                       legend=alt.Legend(title='Platoon Split')),
-        tooltip=['Split:N', 'Metric:N', 'Display:N']
-    )
-    
-    # Labels
-    label_data = []
-    for i, label in enumerate(metric_labels):
-        angle = (i / len(metric_labels)) * 2 * np.pi - np.pi / 2
-        label_data.append({
-            'metric': label,
-            'x': 1.15 * np.cos(angle),
-            'y': 1.15 * np.sin(angle)
-        })
-    
-    labels = alt.Chart(pd.DataFrame(label_data)).mark_text(
-        fontSize=12,
-        fontWeight='bold'
-    ).encode(
-        x=alt.X('x:Q'),
-        y=alt.Y('y:Q'),
-        text='metric:N'
-    )
-    
-    return (area + line + points + labels).properties(
-        width=450,
-        height=450,
-        title='Platoon Splits'
-    ).configure_view(
-        strokeWidth=0
-    )

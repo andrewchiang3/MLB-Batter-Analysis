@@ -281,6 +281,9 @@ def get_count_splits(df):
     """
     Calculate splits by ball-strike count.
     
+    IMPORTANT: For count splits, we only count plate appearances that END at each count.
+    For example, "0-0 Count" means PAs where the final pitch was thrown at 0-0.
+    
     Parameters:
     -----------
     df : pd.DataFrame
@@ -292,58 +295,88 @@ def get_count_splits(df):
     """
     results = []
     
+    # Filter to only events (outcomes that end PAs)
+    events_df = df[df['events'].notna()].copy()
+    
+    if len(events_df) == 0:
+        return pd.DataFrame()
+    
     # Individual counts (0-0 through 3-2)
+    # These are PAs where the FINAL pitch was at this count
     for balls in range(4):
         for strikes in range(3):
-            mask = (df['balls'] == balls) & (df['strikes'] == strikes)
+            mask = (events_df['balls'] == balls) & (events_df['strikes'] == strikes)
             if mask.sum() > 0:
-                stats = calculate_stats(df[mask])
+                stats = calculate_stats(events_df[mask])
                 stats['Split'] = f'{balls}-{strikes} Count'
                 results.append(stats)
     
-    # Full count
-    mask = (df['balls'] == 3) & (df['strikes'] == 2)
+    # Full count (3-2) - already included above but add separate label
+    mask = (events_df['balls'] == 3) & (events_df['strikes'] == 2)
     if mask.sum() > 0:
-        stats = calculate_stats(df[mask])
+        stats = calculate_stats(events_df[mask])
         stats['Split'] = 'Full Count'
         results.append(stats)
     
-    # After counts
+    # "After" counts - these mean the count REACHED this point at some time during the PA
+    # We need to look at ALL pitches, not just final outcomes
     after_counts = [
-        ('After 1-0', df['balls'] >= 1),
-        ('After 2-0', df['balls'] >= 2),
-        ('After 3-0', df['balls'] >= 3),
-        ('After 0-1', df['strikes'] >= 1),
+        ('After 1-0', (df['balls'] >= 1) & (df['strikes'] == 0)),
+        ('After 2-0', (df['balls'] >= 2) & (df['strikes'] == 0)),
+        ('After 3-0', (df['balls'] >= 3) & (df['strikes'] == 0)),
+        ('After 0-1', (df['balls'] == 0) & (df['strikes'] >= 1)),
         ('After 1-1', (df['balls'] >= 1) & (df['strikes'] >= 1)),
         ('After 2-1', (df['balls'] >= 2) & (df['strikes'] >= 1)),
         ('After 3-1', (df['balls'] >= 3) & (df['strikes'] >= 1)),
-        ('After 0-2', df['strikes'] >= 2),
+        ('After 0-2', (df['balls'] == 0) & (df['strikes'] >= 2)),
         ('After 1-2', (df['balls'] >= 1) & (df['strikes'] >= 2)),
         ('After 2-2', (df['balls'] >= 2) & (df['strikes'] >= 2)),
     ]
     
     for name, mask in after_counts:
-        if mask.sum() > 0:
-            stats = calculate_stats(df[mask])
-            stats['Split'] = name
-            results.append(stats)
+        # Get unique PAs that had this count at some point
+        pas_with_count = df[mask].groupby(['game_pk', 'at_bat_number']).size()
+        
+        if len(pas_with_count) > 0:
+            # Get the events for these specific PAs
+            pa_keys = pas_with_count.index.tolist()
+            events_mask = events_df.apply(
+                lambda row: (row['game_pk'], row['at_bat_number']) in pa_keys, 
+                axis=1
+            )
+            
+            if events_mask.sum() > 0:
+                stats = calculate_stats(events_df[events_mask])
+                stats['Split'] = name
+                results.append(stats)
     
-    # Aggregate counts
+    # Aggregate counts - these also check if count was REACHED during PA
     aggregates = [
-        ('Zero Balls', df['balls'] == 0),
-        ('Zero Strikes', df['strikes'] == 0),
-        ('Three Balls', df['balls'] == 3),
-        ('Two Strikes', df['strikes'] == 2),
-        ('Batter Ahead', df['balls'] > df['strikes']),
-        ('Even Count', df['balls'] == df['strikes']),
-        ('Pitcher Ahead', df['strikes'] > df['balls']),
+        ('Zero Balls', (df['balls'] == 0)),
+        ('Zero Strikes', (df['strikes'] == 0)),
+        ('Three Balls', (df['balls'] == 3)),
+        ('Two Strikes', (df['strikes'] == 2)),
+        ('Batter Ahead', (df['balls'] > df['strikes'])),
+        ('Even Count', (df['balls'] == df['strikes'])),
+        ('Pitcher Ahead', (df['strikes'] > df['balls'])),
     ]
     
     for name, mask in aggregates:
-        if mask.sum() > 0:
-            stats = calculate_stats(df[mask])
-            stats['Split'] = name
-            results.append(stats)
+        # Get unique PAs that had this count at some point
+        pas_with_count = df[mask].groupby(['game_pk', 'at_bat_number']).size()
+        
+        if len(pas_with_count) > 0:
+            # Get the events for these specific PAs
+            pa_keys = pas_with_count.index.tolist()
+            events_mask = events_df.apply(
+                lambda row: (row['game_pk'], row['at_bat_number']) in pa_keys,
+                axis=1
+            )
+            
+            if events_mask.sum() > 0:
+                stats = calculate_stats(events_df[events_mask])
+                stats['Split'] = name
+                results.append(stats)
     
     if not results:
         return pd.DataFrame()
