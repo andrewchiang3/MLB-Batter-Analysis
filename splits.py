@@ -147,16 +147,13 @@ def calculate_stats(df):
     hits_in_play = hits - hr
     babip = hits_in_play / balls_in_play if balls_in_play > 0 else 0
     
-    # Games - count unique games where player had at least one completed PA
-    # Note: game_pk should uniquely identify each game including doubleheaders
-    if len(events) > 0:
-        # Count unique game_pk values
-        games = events['game_pk'].nunique()
+    # Games - count unique games where player had at least one PA in this split
+    if len(df) > 0:
+        games = df['game_pk'].nunique()
         
-        # Fallback: if game_pk has issues, try game_date + teams combo
-        # This shouldn't normally be needed but provides robustness
-        if 'game_date' in events.columns and games == 0:
-            games = events['game_date'].nunique()
+        # Fallback: if game_pk has issues, try game_date
+        if games == 0 and 'game_date' in df.columns:
+            games = df['game_date'].nunique()
     else:
         games = 0
     

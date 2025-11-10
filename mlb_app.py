@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 from streamlit_searchbox import st_searchbox
-
+import warnings
+warnings.filterwarnings('ignore', module='pybaseball.plotting')
 
 # Modules
 from player_search import search_players, get_player_full_name
@@ -185,17 +186,19 @@ else:
     
     else:
         player_id = st.session_state['batting_data']['mlbID'].iloc[0]
-        
+    
         # st.write(f"## {st.session_state['player_name']}")
         st.write(f"###### Batting stats from {st.session_state['start_date'].strftime('%B %d, %Y')}"
-                 f" to {st.session_state['end_date'].strftime('%B %d, %Y')}")
+                    f" to {st.session_state['end_date'].strftime('%B %d, %Y')}")
 
         # Player bio header
         col_left, col1, col2, col3, col_right = st.columns([0.5, 1, 1, 1, 0.5])
 
         # Display player img
         with col1:
-            st.image(player_headshot(player_id), width=200)
+            _, center, _ = st.columns([0.2, 1, 0.2])
+            with center:
+                st.image(player_headshot(player_id), width=200)
 
         # Player info
         with col2:
@@ -206,7 +209,9 @@ else:
 
         # Team logo
         with col3:
-            st.image(team_logo(player_id), width = 200)
+            _, center, _ = st.columns([0.2, 1, 0.2])
+            with center:
+                st.image(team_logo(player_id), width = 200)
 
         st.write("---")
 
@@ -217,10 +222,12 @@ else:
 
         with col1:
             "### xwOBA"
-            st.altair_chart(xwOBA_graph(player_data))
+            st.altair_chart(xwOBA_graph(player_data), use_container_width=True)
 
         with col2:
-            st.pyplot(spray_chart(player_data))
+            _, center, _ = st.columns([0.1, 1, 0.1])
+            with center:
+                st.pyplot(spray_chart(player_data))
 
         st.write("---")
 
@@ -231,8 +238,10 @@ else:
             chase_rate(player_data)
 
         with col2:
-            zone_avgs = calculate_zone_batting_average(player_data)
-            heat_map(zone_avgs)
+            _, center, _ = st.columns([0.1, 1, 0.1])
+            with center:
+                zone_avgs = calculate_zone_batting_average(player_data)
+                heat_map(zone_avgs)
 
         st.write("---")
 
@@ -243,20 +252,22 @@ else:
         with col1:
             st.write("### Clutch Splits by OPS")
             clutch_splits = get_clutch_splits(player_data)
-            st.altair_chart(plot_ops_by_split(clutch_splits))
+            st.altair_chart(plot_ops_by_split(clutch_splits), use_container_width=True)
 
         with col2:
-            st.altair_chart(create_platoon_radar_chart(platoon_df))
+            st.altair_chart(create_platoon_radar_chart(platoon_df), use_container_width=True)
 
         col1, col2 = st.columns([2, 1])
         splits_df = get_count_splits(player_data)
         ballpark_df = get_ballpark_splits(player_data)
 
         with col1:
-            st.altair_chart(create_count_heatmap(splits_df))
+            st.altair_chart(create_count_heatmap(splits_df), use_container_width=True)
 
         with col2:
-            display_best_ballpark(ballpark_df)
+            _, center, _ = st.columns([0.1, 1, 0.1])
+            with center:
+                display_best_ballpark(ballpark_df)
 
         st.write("---")
 
@@ -264,5 +275,3 @@ else:
         st.write("Analyze how this batter performs against specific pitchers")
 
         pitcher_matchup(player_data)
-        
-        st.dataframe(get_count_splits(player_data))
