@@ -109,16 +109,6 @@ def pitcher_matchup(player_data):
                 order=alt.Order('Count:Q', sort='descending')  # Largest slices first
             )
             
-            # Add percentage labels with better positioning
-            text = pie_chart.mark_text(
-                radiusOffset=30,  # Push labels outside the pie
-                fontSize=13,
-                fontWeight='bold',
-                color='black'
-            ).encode(
-                text='Label:N'
-            )
-            
             # Combine chart
             # Just use the pie chart without text overlay
             outcome_chart = pie_chart.properties(

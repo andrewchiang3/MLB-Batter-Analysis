@@ -119,15 +119,13 @@ def load_stats(batting_data):
         with cols[0]:
             st.metric(
                 "Games",
-                batting_data['G'],
-                width="content"
+                batting_data['G']
             )
         
         with cols[1]:
             st.metric(
                 "PA",
                 batting_data['PA'],
-                width="content",
                 help="Plate Appearances"
             )
 
@@ -138,7 +136,6 @@ def load_stats(batting_data):
             st.metric(
                 "AB",
                 batting_data['AB'],
-                width="content",
                 help="At-bats"
             )
         
@@ -146,7 +143,6 @@ def load_stats(batting_data):
             st.metric(
                 "R",
                 batting_data['R'],
-                width="content",
                 help="Runs"
             )
 
@@ -157,7 +153,6 @@ def load_stats(batting_data):
             st.metric(
                 "Hits",
                 batting_data['H'],
-                width="content",
                 help="Hits"
             )
         
@@ -165,7 +160,6 @@ def load_stats(batting_data):
             st.metric(
                 "2B",
                 batting_data['2B'],
-                width="content",
                 help="Doubles"
             )
 
@@ -176,7 +170,6 @@ def load_stats(batting_data):
             st.metric(
                 "3B",
                 batting_data['3B'],
-                width="content",
                 help="Triples"
             )
         
@@ -184,7 +177,6 @@ def load_stats(batting_data):
             st.metric(
                 "HR",
                 batting_data['HR'],
-                width="content",
                 help="Home runs"
             )
 
@@ -195,7 +187,6 @@ def load_stats(batting_data):
             st.metric(
                 "RBIs",
                 batting_data['RBI'],
-                width="content",
                 help="Runs batted in"
             )
         
@@ -203,7 +194,6 @@ def load_stats(batting_data):
             st.metric(
                 "BB + IBB",
                 batting_data['BB'] + batting_data['IBB'],
-                width="content",
                 help="Walks + Intentional walks"
             )
 
@@ -214,7 +204,6 @@ def load_stats(batting_data):
             st.metric(
                 "HBP",
                 batting_data['HBP'],
-                width="content",
                 help="Hit by pitch"
             )
         
@@ -222,7 +211,6 @@ def load_stats(batting_data):
             st.metric(
                 "SO",
                 batting_data['SO'],
-                width="content",
                 help="Strikeouts"
             )
 
@@ -233,7 +221,6 @@ def load_stats(batting_data):
             st.metric(
                 "SB",
                 batting_data['SB'],
-                width="content",
                 help="Stolen bases"
             )
         
@@ -241,7 +228,6 @@ def load_stats(batting_data):
             st.metric(
                 "CS",
                 batting_data['CS'],
-                width="content",
                 help="Caught stealing"
             )
 
@@ -252,7 +238,6 @@ def load_stats(batting_data):
             st.metric(
                 "AVG",
                 batting_data['BA'],
-                width="content",
                 help="Batting average"
             )
         
@@ -260,7 +245,6 @@ def load_stats(batting_data):
             st.metric(
                 "OBP",
                 batting_data['OBP'],
-                width="content",
                 help = "On-base percentage"
             )
 
@@ -271,7 +255,6 @@ def load_stats(batting_data):
             st.metric(
                 "SLG",
                 batting_data['SLG'],
-                width="content",
                 help="Slugging"
             )
         
@@ -279,7 +262,6 @@ def load_stats(batting_data):
             st.metric(
                 "OPS",
                 batting_data['OPS'],
-                width="content",
                 help="On-base + Slugging"
             )
 
