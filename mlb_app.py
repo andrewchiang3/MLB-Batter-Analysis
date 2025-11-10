@@ -89,21 +89,36 @@ if 'data' not in st.session_state:
     # Main page when no data is loaded
     st.markdown("---")
     st.subheader("Get Started")
-    st.write("Enter a player name and select a date range to begin analysis")
+    st.info("**Statcast data available from 2015-present** • Select a player and date range to begin analysis")
 
-    # Columns for layout
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # Initialize search term in session state to prevent reset
+    if 'search_term' not in st.session_state:
+        st.session_state['search_term'] = None
+    
+    # Initialize date defaults
+    if 'temp_start' not in st.session_state:
+        st.session_state['temp_start'] = None
+    if 'temp_end' not in st.session_state:
+        st.session_state['temp_end'] = None
+
+    # Columns for more compact layout
+    col_spacer1, col1, col2, col3, col_spacer2 = st.columns([0.5, 3, 2, 2, 0.5])
 
     # Player search box
     with col1:
-        # Use searchbox for autocomplete
+        # Use searchbox for autocomplete with default value from session state
         selected_player_display = st_searchbox(
             search_players,
             label = "Batter Name",
             placeholder = "Start typing a player name...",
             clear_on_submit = False,
-            key = "player_searchbox"
+            key = "player_searchbox",
+            default = st.session_state.get('search_term', None)
         )
+        
+        # Store search term to prevent reset
+        if selected_player_display:
+            st.session_state['search_term'] = selected_player_display
 
         # Get actual name from display name
         player_name = get_player_full_name(selected_player_display)
@@ -111,30 +126,32 @@ if 'data' not in st.session_state:
         if selected_player_display and not player_name:
             st.warning("Please select a valid player from the dropdown")
 
-    # Date input
+    # Date input - blank by default unless season selected
     with col2:
         start_date = st.date_input(
             "**Start Date**",
-            value=pd.to_datetime('2025-03-27'),
+            value=st.session_state['temp_start'],
             min_value=pd.to_datetime('2015-04-01'),
             max_value=pd.to_datetime('2025-11-15'),
-            help="Statcast era: 2015-present"
+            help="Statcast era: 2015-present",
+            key="main_start_date"
         )
 
     with col3:
         end_date = st.date_input(
-            "**End Date:**",
-            value=pd.to_datetime('2025-04-07'),
+            "**End Date**",
+            value=st.session_state['temp_end'],
             min_value=pd.to_datetime('2015-04-01'),
             max_value=pd.to_datetime('2025-11-15'),
-            help="Select the end date for analysis"
+            help="Select the end date for analysis",
+            key="main_end_date"
         )
 
     # Validation
     validation_errors = []
-    if not player_name:
-        validation_errors.append("Please select a player")
-    if start_date > end_date:
+    if not player_name and start_date is None or end_date is None:
+        validation_errors.append("Please select a player and both start and end dates")
+    elif start_date > end_date:
         validation_errors.append("Start date must be before end date")
     
     if validation_errors:
@@ -169,6 +186,12 @@ if 'data' not in st.session_state:
                     st.session_state['start_date'] = start_date
                     st.session_state['end_date'] = end_date
                     
+                    # Clear temp dates
+                    if 'temp_start' in st.session_state:
+                        del st.session_state['temp_start']
+                    if 'temp_end' in st.session_state:
+                        del st.session_state['temp_end']
+                    
                     st.success(f"Successfully loaded {len(data):,} pitches!")
                     st.rerun()
                     
@@ -180,8 +203,10 @@ else:
     player_name = st.session_state['player_name']
     st.markdown("---")
 
-    # Quick search bar at the top
-    col_search, col_button = st.columns([4, 1])
+    # Quick search bar at the top with date options
+    st.write("### Change Player or Date Range")
+    
+    col_search, col_start, col_end, col_button = st.columns([3, 1.5, 1.5, 1])
 
     with col_search:
         new_selected_display = st_searchbox(
@@ -194,36 +219,69 @@ else:
 
         new_player_name = get_player_full_name(new_selected_display) if new_selected_display else None
 
+    with col_start:
+        new_start_date = st.date_input(
+            "**Start Date**",
+            value=st.session_state.get('quick_temp_start', st.session_state['start_date']),
+            min_value=pd.to_datetime('2015-04-01'),
+            max_value=pd.to_datetime('2025-11-15'),
+            key="quick_start_date"
+        )
+    
+    with col_end:
+        new_end_date = st.date_input(
+            "**End Date**",
+            value=st.session_state.get('quick_temp_end', st.session_state['end_date']),
+            min_value=pd.to_datetime('2015-04-01'),
+            max_value=pd.to_datetime('2025-11-15'),
+            key="quick_end_date"
+        )
+
     with col_button:
-        st.markdown("")  # Spacing to align with searchbox
+        st.markdown("")  # Spacing to align with date inputs
         st.markdown("")  # More spacing
-        if st.button("Load Player", type="primary", disabled=not new_player_name, use_container_width=True):
-            # Update session state with new player name
-            st.session_state['player_name'] = new_player_name
+        
+        # Check if anything changed
+        player_changed = new_player_name and new_player_name != st.session_state['player_name']
+        dates_changed = (new_start_date != st.session_state['start_date'] or 
+                        new_end_date != st.session_state['end_date'])
+        
+        if st.button(
+            "Load Data", 
+            type="primary", 
+            disabled=not (player_changed or dates_changed),
+            use_container_width=True
+        ):
+            # Determine what to update
+            load_player = new_player_name if player_changed else st.session_state['player_name']
+            load_start = new_start_date
+            load_end = new_end_date
             
-            # Load new data immediately
-            with st.spinner(f"Loading data for {new_player_name}..."):
+            # Update session state
+            st.session_state['player_name'] = load_player
+            st.session_state['start_date'] = load_start
+            st.session_state['end_date'] = load_end
+            
+            # Load new data
+            with st.spinner(f"Loading data for {load_player}..."):
                 try:
-                    new_batting_data = load_batting_stats(
-                        st.session_state['start_date'], 
-                        st.session_state['end_date'],
-                        st.session_state['player_name']
-                    )
-
+                    new_batting_data = load_batting_stats(load_start, load_end, load_player)
                     new_player_id = new_batting_data['mlbID'].iloc[0]
-
-                    new_data = load_statcast_data(
-                        st.session_state['start_date'], 
-                        st.session_state['end_date'],
-                    )
-
+                    new_data = load_statcast_data(load_start, load_end)
                     bio = player_bio(new_player_id)
                     
                     # Update with new data
                     st.session_state['bio'] = bio
                     st.session_state['data'] = new_data
                     st.session_state['batting_data'] = new_batting_data
-                    st.success(f"Loaded {len(new_data):,} pitches for {new_player_name}!")
+                    
+                    # Clear temp dates
+                    if 'quick_temp_start' in st.session_state:
+                        del st.session_state['quick_temp_start']
+                    if 'quick_temp_end' in st.session_state:
+                        del st.session_state['quick_temp_end']
+                    
+                    st.success(f"Loaded {len(new_data):,} pitches for {load_player}!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error loading data: {e}")
@@ -318,7 +376,7 @@ else:
             **Good:** .370+  
             **Below Avg:** <.290  
 
-            _Shows a player’s true offensive skill per plate appearance._
+            _Shows a player's true offensive skill per plate appearance._
             """)
 
         with col2:
@@ -374,8 +432,6 @@ else:
             """, unsafe_allow_html=True)
 
             display_best_ballpark(ballpark_df)
-
-
 
         st.write("---")
 
