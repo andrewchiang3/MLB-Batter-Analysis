@@ -2,23 +2,83 @@ import streamlit as st
 import pandas as pd
 from streamlit_searchbox import st_searchbox
 import warnings
+import streamlit.components.v1 as components
 warnings.filterwarnings('ignore', module='pybaseball.plotting')
 
 # Modules
 from player_search import search_players, get_player_full_name
 from data_loader import load_statcast_data, load_batting_stats
-from player_bio import player_headshot, player_bio, team_logo, load_stats
+from player_bio import *
 from visualizations import *
 from utils import calculate_zone_batting_average
 from matchup import pitcher_matchup
 from splits import *
 from splits_visualizations import *
 
+# Function to get screen width
+def get_screen_width():
+    """Inject JavaScript to get screen width and store in session state"""
+    js_code = """
+    <script>
+        var width = window.innerWidth;
+        window.parent.postMessage({type: 'streamlit:setComponentValue', value: width}, '*');
+    </script>
+    """
+    width = components.html(js_code, height=0)
+    return width
+
+# Initialize screen width in session state
+if 'screen_width' not in st.session_state:
+    st.session_state['screen_width'] = get_screen_width()
+
+# Detect if mobile (width < 768px is typical mobile breakpoint)
+def is_mobile():
+    width = st.session_state.get('screen_width', 1200)
+    return width is not None and width < 768
+
 # App configuration
 st.set_page_config(
     page_title = "MLB",
     layout = 'wide'
 )
+
+# Get screen width on first load
+if 'screen_width' not in st.session_state:
+    # Use a more reliable method with streamlit-javascript
+    st.session_state['screen_width'] = None
+
+# Add hidden div to capture screen width
+components.html(
+    """
+    <script>
+        const width = window.innerWidth;
+        const streamlitDoc = window.parent.document;
+        const statusElements = streamlitDoc.querySelectorAll('[data-testid="stStatusWidget"]');
+        if (statusElements.length > 0) {
+            statusElements[0].textContent = width;
+        }
+        // Send message to Streamlit
+        window.parent.postMessage({
+            type: 'streamlit:setComponentValue',
+            value: width
+        }, '*');
+    </script>
+    """,
+    height=0
+)
+
+def is_mobile():
+    """Check if on mobile - you can adjust this manually or detect via query params"""
+    # Simple approach: check if layout is set to wide
+    # In practice, we'll use a simpler heuristic
+    # For now, let's add a toggle or use a default assumption
+    return st.session_state.get('force_mobile', False)
+
+# Add a hidden parameter to force mobile view (for testing)
+# You can set this via URL: ?mobile=true
+query_params = st.query_params
+if 'mobile' in query_params:
+    st.session_state['force_mobile'] = query_params['mobile'].lower() == 'true'
 
 # Main page layout
 st.title("MLB Batter Analysis")
@@ -117,6 +177,7 @@ if 'data' not in st.session_state:
 
 # Data is already loaded, switch if user wants to
 else:
+    player_name = st.session_state['player_name']
     st.markdown("---")
 
     # Quick search bar at the top
@@ -186,48 +247,82 @@ else:
     
     else:
         player_id = st.session_state['batting_data']['mlbID'].iloc[0]
+        start_date = st.session_state['start_date'].strftime('%B %d, %Y')
+        end_date = st.session_state['end_date'].strftime('%B %d, %Y')
     
-        # st.write(f"## {st.session_state['player_name']}")
-        st.write(f"###### Batting stats from {st.session_state['start_date'].strftime('%B %d, %Y')}"
-                    f" to {st.session_state['end_date'].strftime('%B %d, %Y')}")
+        st.write(f"###### Batting stats from {start_date} to {end_date}")
 
-        # Player bio header
-        col_left, col1, col2, col3, col_right = st.columns([0.5, 1, 1, 1, 0.5])
+        # CONDITIONAL RENDERING BASED ON SCREEN SIZE
+        mobile_view = is_mobile()
 
-        # Display player img
-        with col1:
-            _, center, _ = st.columns([0.2, 1, 0.2])
-            with center:
+        if mobile_view:
+            # ========== MOBILE LAYOUT ==========
+            st.write(f"### {st.session_state['player_name']}")
+            
+            # Compact player bio
+            col1, col2 = st.columns([1, 2])
+            
+            with col1:
+                st.image(player_headshot(player_id), width=120)
+            
+            with col2:
+                st.write(f"**#{st.session_state['bio']['number']}** • {st.session_state['bio']['position']}")
+                st.write(f"{st.session_state['bio']['team']}")
+                st.write(f"Age {st.session_state['bio']['age']} • {st.session_state['bio']['bats']}/{st.session_state['bio']['throws']}")
+                st.write(f"{st.session_state['bio']['height']} • {st.session_state['bio']['weight']} lbs")
+            
+            st.write("---")
+            
+            # Compact stats table instead of metrics
+            st.write("### Statistics")
+            load_stats_compact(st.session_state['batting_data'])
+            
+        else:
+            # ========== DESKTOP LAYOUT ==========
+            # Player bio header with larger images
+            col_left, col1, col2, col3, col_right = st.columns([0.5, 1, 1, 1, 0.5])
+
+            # Display player img
+            with col1:
                 st.image(player_headshot(player_id), width=200)
 
-        # Player info
-        with col2:
-            st.write(f"**{st.session_state['bio']['name']}** #{st.session_state['bio']['number']}")
-            st.write(f"{st.session_state['bio']['team']} • {st.session_state['bio']['position']}")
-            st.write(f"Age: {st.session_state['bio']['age']} | Bats: {st.session_state['bio']['bats']} | Throws: {st.session_state['bio']['throws']}")
-            st.write(f"Height: {st.session_state['bio']['height']} | Weight: {st.session_state['bio']['weight']} lbs")
+            # Player info
+            with col2:
+                st.write(f"**{st.session_state['bio']['name']}** #{st.session_state['bio']['number']}")
+                st.write(f"{st.session_state['bio']['team']} • {st.session_state['bio']['position']}")
+                st.write(f"Age: {st.session_state['bio']['age']} | Bats: {st.session_state['bio']['bats']} | Throws: {st.session_state['bio']['throws']}")
+                st.write(f"Height: {st.session_state['bio']['height']} | Weight: {st.session_state['bio']['weight']} lbs")
 
-        # Team logo
-        with col3:
-            _, center, _ = st.columns([0.2, 1, 0.2])
-            with center:
-                st.image(team_logo(player_id), width = 200)
+            # Team logo
+            with col3:
+                st.image(team_logo(player_id), width=200)
+
+            st.write("---")
+
+            # Full batting statistics with metrics
+            load_stats(st.session_state['batting_data'])
 
         st.write("---")
 
-        # Batting statistics
-        load_stats(st.session_state['batting_data'])
-
+        # Rest of visualizations remain the same
         col1, col2 = st.columns([1, 1])
 
         with col1:
-            "### xwOBA"
+            "### xwOBA Rolling by PA"
             st.altair_chart(xwOBA_graph(player_data), use_container_width=True)
+            st.markdown("""
+            ### xwOBA (Expected Weighted On-Base Average)
+            Estimates how a hitter *should* perform based on contact quality — using exit velocity, launch angle, walks, and strikeouts — instead of luck or defense.
+
+            **League Avg:** ~.320  
+            **Good:** .370+  
+            **Below Avg:** <.290  
+
+            _Shows a player’s true offensive skill per plate appearance._
+            """)
 
         with col2:
-            _, center, _ = st.columns([0.1, 1, 0.1])
-            with center:
-                st.pyplot(spray_chart(player_data))
+            st.pyplot(spray_chart(player_data))
 
         st.write("---")
 
@@ -238,10 +333,8 @@ else:
             chase_rate(player_data)
 
         with col2:
-            _, center, _ = st.columns([0.1, 1, 0.1])
-            with center:
-                zone_avgs = calculate_zone_batting_average(player_data)
-                heat_map(zone_avgs)
+            zone_avgs = calculate_zone_batting_average(player_data)
+            heat_map(zone_avgs)
 
         st.write("---")
 
@@ -265,9 +358,24 @@ else:
             st.altair_chart(create_count_heatmap(splits_df), use_container_width=True)
 
         with col2:
-            _, center, _ = st.columns([0.1, 1, 0.1])
-            with center:
-                display_best_ballpark(ballpark_df)
+            st.markdown(f"""
+            <div style="
+                text-align:center;
+                padding:8px 0;
+                margin-bottom:8px;
+            ">
+                <h4 style="margin-bottom:0; font-size:18px;">
+                    From <b>{start_date}</b> to <b>{end_date}</b>,
+                </h4>
+                <h4 style="margin-top:4px; font-size:18px;">
+                    <b>{player_name}</b> performed the best at:
+                </h4>
+            </div>
+            """, unsafe_allow_html=True)
+
+            display_best_ballpark(ballpark_df)
+
+
 
         st.write("---")
 

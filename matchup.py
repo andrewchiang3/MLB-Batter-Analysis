@@ -70,7 +70,7 @@ def pitcher_matchup(player_data):
     outcome_counts = outcomes['events'].value_counts()
 
     with col1:
-        # Pie chart of outcomes
+    # Pie chart of outcomes
         if len(outcome_counts) > 0:
             # Prepare data for Altair
             outcome_df = outcome_counts.reset_index()
@@ -80,44 +80,53 @@ def pitcher_matchup(player_data):
             total = outcome_df['Count'].sum()
             outcome_df['Percentage'] = (outcome_df['Count'] / total * 100).round(1)
             
-            # Create pie chart
+            # Filter out very small slices that clutter the chart
+            outcome_df['Label'] = outcome_df.apply(
+                lambda row: f"{row['Percentage']:.1f}%" if row['Percentage'] >= 5 else "",
+                axis=1
+            )
+            
+            # Create pie chart with better colors
             pie_chart = alt.Chart(outcome_df).mark_arc(
                 stroke='white',
-                strokeWidth=2
+                strokeWidth=3,
+                outerRadius=150
             ).encode(
                 theta=alt.Theta('Count:Q', stack=True),
                 color=alt.Color('Outcome:N', 
-                            legend=alt.Legend(title='Outcome', 
-                                            titleFontSize=12, 
-                                            labelFontSize=11)),
+                            legend=alt.Legend(
+                                title='Outcome', 
+                                titleFontSize=13, 
+                                labelFontSize=11,
+                                orient='right',
+                                titleFontWeight='bold'
+                            )),
                 tooltip=[
                     alt.Tooltip('Outcome:N', title='Outcome'),
                     alt.Tooltip('Count:Q', title='Count'),
                     alt.Tooltip('Percentage:Q', title='Percentage', format='.1f')
-                ]
+                ],
+                order=alt.Order('Count:Q', sort='descending')  # Largest slices first
             )
             
-            # Add percentage labels
+            # Add percentage labels with better positioning
             text = pie_chart.mark_text(
-                radius=140,  # Distance from center
-                fontSize=12,
-                fontWeight='bold'
+                radiusOffset=30,  # Push labels outside the pie
+                fontSize=13,
+                fontWeight='bold',
+                color='black'
             ).encode(
-                text=alt.Text('Percentage:Q', format='.1f'),
-                color=alt.value('black')
-            ).transform_calculate(
-                label="datum.Percentage + '%'"
-            ).encode(
-                text='label:N'
+                text='Label:N'
             )
             
             # Combine chart
-            outcome_chart = (pie_chart + text).properties(
-                width=400,
-                height=400,
+            # Just use the pie chart without text overlay
+            outcome_chart = pie_chart.properties(
+                width=450,
+                height=450,
                 title={
                     'text': 'Outcome Distribution',
-                    'fontSize': 12,
+                    'fontSize': 14,
                     'fontWeight': 'bold'
                 }
             )
@@ -157,59 +166,60 @@ def pitcher_matchup(player_data):
 
     st.write(f"**Total At-Bats: {len(at_bat_groups)}**")
 
-    for (game_pk, at_bat_num), at_bat_data in at_bat_groups:
-        at_bat_sorted = at_bat_data.sort_values('pitch_number')
-        
-        game_date = pd.to_datetime(at_bat_sorted.iloc[0]['game_date']).strftime('%B %d, %Y')
-        outcome = at_bat_sorted.iloc[-1]['events']
-        num_pitches = len(at_bat_sorted)
-        
-        with st.expander(f"{game_date} - {num_pitches} pitches → **{outcome}**"):
-            # Show pitch details text
-            st.write("**Pitch Sequence:**")
-            for idx, (_, pitch) in enumerate(at_bat_sorted.iterrows(), 1):
-                count = f"{int(pitch['balls'])}-{int(pitch['strikes'])}"
-                st.write(
-                    f"**Pitch {idx}:** {pitch['pitch_name']} - {count} - "
-                    f"{pitch['description']} - {pitch['release_speed']:.1f} mph"
-                )
+    with st.expander(f"At-bat sequences against {selected_pitcher_name}"):
+        for (game_pk, at_bat_num), at_bat_data in at_bat_groups:
+            at_bat_sorted = at_bat_data.sort_values('pitch_number')
             
-            st.write("---")
-            st.write("**Pitch Locations:**")
+            game_date = pd.to_datetime(at_bat_sorted.iloc[0]['game_date']).strftime('%B %d, %Y')
+            outcome = at_bat_sorted.iloc[-1]['events']
+            num_pitches = len(at_bat_sorted)
             
-            # Create pitch sequence visualization
-            cols_per_row = min(num_pitches, 3)  # Max 3 pitches per row
-            
-            pitch_num = 1
-            for start_idx in range(0, num_pitches, cols_per_row):
-                # Create columns for this row
-                cols = st.columns(cols_per_row)
+            with st.expander(f"{game_date} - {num_pitches} pitches → **{outcome}**"):
+                # Show pitch details text
+                st.write("**Pitch Sequence:**")
+                for idx, (_, pitch) in enumerate(at_bat_sorted.iterrows(), 1):
+                    count = f"{int(pitch['balls'])}-{int(pitch['strikes'])}"
+                    st.write(
+                        f"**Pitch {idx}:** {pitch['pitch_name']} - {count} - "
+                        f"{pitch['description']} - {pitch['release_speed']:.1f} mph"
+                    )
                 
-                # Get pitches for this row
-                end_idx = min(start_idx + cols_per_row, num_pitches)
-                row_pitches = list(at_bat_sorted.iterrows())[start_idx:end_idx]
+                st.write("---")
+                st.write("**Pitch Locations:**")
                 
-                for col_idx, (_, pitch) in enumerate(row_pitches):
-                    with cols[col_idx]:
-                        # Create a dataframe with just this one pitch
-                        single_pitch = pitch.to_frame().T
-                        
-                        # Get count for title
-                        count = f"{int(pitch['balls'])}-{int(pitch['strikes'])}"
-                        
-                        # Create title
-                        title = f"Pitch #{pitch_num} - {count}\n{pitch['pitch_name']}\n{pitch['description']}"
-                        if pd.notna(pitch['events']):
-                            title += f"\n**{pitch['events'].upper()}**"
-                        
-                        # Let plot_strike_zone create the plot
-                        ax = plot_strike_zone(single_pitch, title=title, 
-                                            colorby='pitch_type', annotation='release_speed')
-                        
-                        # Get the figure from the axes
-                        fig = ax.get_figure()
-                        
-                        # Display in this column
-                        st.pyplot(fig)
-                        
-                        pitch_num += 1
+                # Create pitch sequence visualization
+                cols_per_row = min(num_pitches, 3)  # Max 3 pitches per row
+                
+                pitch_num = 1
+                for start_idx in range(0, num_pitches, cols_per_row):
+                    # Create columns for this row
+                    cols = st.columns(cols_per_row)
+                    
+                    # Get pitches for this row
+                    end_idx = min(start_idx + cols_per_row, num_pitches)
+                    row_pitches = list(at_bat_sorted.iterrows())[start_idx:end_idx]
+                    
+                    for col_idx, (_, pitch) in enumerate(row_pitches):
+                        with cols[col_idx]:
+                            # Create a dataframe with just this one pitch
+                            single_pitch = pitch.to_frame().T
+                            
+                            # Get count for title
+                            count = f"{int(pitch['balls'])}-{int(pitch['strikes'])}"
+                            
+                            # Create title
+                            title = f"Pitch #{pitch_num} - {count}\n{pitch['pitch_name']}\n{pitch['description']}"
+                            if pd.notna(pitch['events']):
+                                title += f"\n**{pitch['events'].upper()}**"
+                            
+                            # Let plot_strike_zone create the plot
+                            ax = plot_strike_zone(single_pitch, title=title, 
+                                                colorby='pitch_type', annotation='release_speed')
+                            
+                            # Get the figure from the axes
+                            fig = ax.get_figure()
+                            
+                            # Display in this column
+                            st.pyplot(fig)
+                            
+                            pitch_num += 1

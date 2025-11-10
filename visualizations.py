@@ -274,7 +274,7 @@ def spray_chart(data):
     hits = ['single', 'double', 'triple', 'home_run']
     data_filtered = data[data['events'].isin(hits)]
 
-    ax = spraychart(data_filtered, 'yankees', title = 'Spray chart')
+    ax = spraychart(data_filtered, 'yankees', title = 'Hits Spray chart')
     fig = ax.get_figure()
     
     return fig
@@ -448,7 +448,9 @@ def heat_map(df):
             scale=alt.Scale(
                 scheme="redblue",  # Red for high, blue for low
                 domain=[0, 0.5],
-                reverse=True  # Reverse so red is high, blue is low
+                domainMid=0.3,
+                reverse=True,  # Reverse so red is high, blue is low
+                clamp=True
             ),
             legend=alt.Legend(titleFontSize=13, labelFontSize=12, titleFontWeight='bold')
         ),

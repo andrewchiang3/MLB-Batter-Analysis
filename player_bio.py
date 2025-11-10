@@ -282,3 +282,34 @@ def load_stats(batting_data):
                 width="content",
                 help="On-base + Slugging"
             )
+
+def load_stats_compact(batting_data):
+    """Compact table view for mobile - no metrics, just a clean table"""
+    stats_dict = {
+        'Stat': ['AVG', 'OBP', 'SLG', 'OPS', 'PA', 'AB', 'H', '2B', '3B', 'HR', 'RBI', 'BB', 'SO', 'SB'],
+        'Value': [
+            f"{batting_data['BA'].iloc[0]:.3f}",
+            f"{batting_data['OBP'].iloc[0]:.3f}",
+            f"{batting_data['SLG'].iloc[0]:.3f}",
+            f"{batting_data['OPS'].iloc[0]:.3f}",
+            int(batting_data['PA'].iloc[0]),
+            int(batting_data['AB'].iloc[0]),
+            int(batting_data['H'].iloc[0]),
+            int(batting_data['2B'].iloc[0]),
+            int(batting_data['3B'].iloc[0]),
+            int(batting_data['HR'].iloc[0]),
+            int(batting_data['RBI'].iloc[0]),
+            int(batting_data['BB'].iloc[0] + batting_data['IBB'].iloc[0]),
+            int(batting_data['SO'].iloc[0]),
+            int(batting_data['SB'].iloc[0])
+        ]
+    }
+    
+    stats_df = pd.DataFrame(stats_dict)
+    
+    st.dataframe(
+        stats_df,
+        hide_index=True,
+        use_container_width=True,
+        height=525  # Show all rows without scrolling
+    )
