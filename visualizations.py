@@ -134,7 +134,7 @@ def create_interpolated_data(recent_pas: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(interpolated_data)
 
 
-def create_line_chart(recent_pas: pd.DataFrame) -> alt.Chart:
+def create_line_chart(recent_pas: pd.DataFrame, x_min: float, x_max: float) -> alt.Chart:
     """
     Create the main xwOBA line chart.
     
@@ -142,6 +142,10 @@ def create_line_chart(recent_pas: pd.DataFrame) -> alt.Chart:
     -----------
     recent_pas : pd.DataFrame
         Recent plate appearances data
+    x_min : float
+        Minimum x-axis value
+    x_max : float
+        Maximum x-axis value
     
     Returns:
     --------
@@ -155,7 +159,7 @@ def create_line_chart(recent_pas: pd.DataFrame) -> alt.Chart:
     ).encode(
         x=alt.X('pa_number:Q', 
                 title=None,
-                scale=alt.Scale(domain=[0, len(recent_pas) - 1]),
+                scale=alt.Scale(domain=[x_min, x_max]),
                 axis=alt.Axis(
                     grid=False,
                     domain=False,
@@ -180,7 +184,8 @@ def create_line_chart(recent_pas: pd.DataFrame) -> alt.Chart:
 
 
 def create_selector_and_points(interpolated_df: pd.DataFrame, 
-                               recent_pas_len: int) -> tuple:
+                               x_min: float,
+                               x_max: float) -> tuple:
     """
     Create the mouse selection rule and tracking points.
     
@@ -188,8 +193,10 @@ def create_selector_and_points(interpolated_df: pd.DataFrame,
     -----------
     interpolated_df : pd.DataFrame
         Interpolated data
-    recent_pas_len : int
-        Length of recent PAs for domain scaling
+    x_min : float
+        Minimum x-axis value
+    x_max : float
+        Maximum x-axis value
     
     Returns:
     --------
@@ -209,7 +216,7 @@ def create_selector_and_points(interpolated_df: pd.DataFrame,
         opacity=0,
         size=2
     ).encode(
-        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, recent_pas_len - 1])),
+        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[x_min, x_max])),
         tooltip=alt.value(None)
     ).add_params(mouse_selection)
 
@@ -219,7 +226,7 @@ def create_selector_and_points(interpolated_df: pd.DataFrame,
         filled=True,
         color='#e53935'
     ).encode(
-        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, recent_pas_len - 1])),
+        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[x_min, x_max])),
         y=alt.Y('rolling_xwoba:Q'),
         opacity=alt.condition(mouse_selection, alt.value(1), alt.value(0)),
         tooltip=alt.value(None)
@@ -230,7 +237,8 @@ def create_selector_and_points(interpolated_df: pd.DataFrame,
 
 def create_info_box(interpolated_df: pd.DataFrame, 
                     mouse_selection,
-                    recent_pas_len: int) -> tuple:
+                    x_min: float,
+                    x_max: float) -> tuple:
     """
     Create the info box with xwOBA and date information.
     
@@ -240,14 +248,22 @@ def create_info_box(interpolated_df: pd.DataFrame,
         Interpolated data
     mouse_selection
         Mouse selection parameter from Altair
-    recent_pas_len : int
-        Length of recent PAs for domain scaling
+    x_min : float
+        Minimum x-axis value
+    x_max : float
+        Maximum x-axis value
     
     Returns:
     --------
     tuple : (info_box_bg, xwoba_text, date_text)
     """
-    # Info box background
+    # Calculate dynamic box width based on x-axis range
+    x_range = x_max - x_min
+    # Scale box width: smaller for narrow ranges, larger for wide ranges
+    # Use a base size and scale it proportionally
+    box_half_width = max(3, min(8, x_range * 0.08))
+    
+    # Info box background with fixed vertical size but dynamic horizontal size
     info_box = alt.Chart(interpolated_df).mark_rect(
         color='#f5f5f5',
         opacity=0.95,
@@ -255,16 +271,16 @@ def create_info_box(interpolated_df: pd.DataFrame,
         strokeWidth=1.5,
         cornerRadius=2
     ).encode(
-        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, recent_pas_len - 1])),
+        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[x_min, x_max])),
         y=alt.Y('rolling_xwoba:Q'),
         opacity=alt.condition(mouse_selection, alt.value(0.95), alt.value(0))
     ).transform_calculate(
-        box_left='datum.pa_number - 8',
-        box_right='datum.pa_number + 8',
+        box_left=f'datum.pa_number - {box_half_width}',
+        box_right=f'datum.pa_number + {box_half_width}',
         box_top='datum.rolling_xwoba - 0.012',
         box_bottom='datum.rolling_xwoba - 0.072'
     ).encode(
-        x=alt.X('box_left:Q', scale=alt.Scale(domain=[0, recent_pas_len - 1])),
+        x=alt.X('box_left:Q', scale=alt.Scale(domain=[x_min, x_max])),
         x2=alt.X2('box_right:Q'),
         y=alt.Y('box_top:Q'),
         y2=alt.Y2('box_bottom:Q')
@@ -279,7 +295,7 @@ def create_info_box(interpolated_df: pd.DataFrame,
         fontWeight='normal',
         color='#333333'
     ).encode(
-        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, recent_pas_len - 1])),
+        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[x_min, x_max])),
         y='rolling_xwoba:Q',
         text=alt.condition(mouse_selection, alt.Text('xwoba_line:N'), alt.value(' ')),
         opacity=alt.condition(mouse_selection, alt.value(1), alt.value(0))
@@ -294,7 +310,7 @@ def create_info_box(interpolated_df: pd.DataFrame,
         fontWeight='normal',
         color='#666666'
     ).encode(
-        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[0, recent_pas_len - 1])),
+        x=alt.X('pa_number:Q', scale=alt.Scale(domain=[x_min, x_max])),
         y='rolling_xwoba:Q',
         text=alt.condition(mouse_selection, 'date_line:N', alt.value(' ')),
         opacity=alt.condition(mouse_selection, alt.value(1), alt.value(0))
@@ -303,14 +319,14 @@ def create_info_box(interpolated_df: pd.DataFrame,
     return info_box, xwoba_text, date_text
 
 
-def create_league_average_line(recent_pas_len: int) -> tuple:
+def create_league_average_line(x_max: float) -> tuple:
     """
     Create the league average reference line and label.
     
     Parameters:
     -----------
-    recent_pas_len : int
-        Length of recent PAs for positioning label
+    x_max : float
+        Maximum x-axis value for positioning label
     
     Returns:
     --------
@@ -326,7 +342,7 @@ def create_league_average_line(recent_pas_len: int) -> tuple:
     )
 
     league_avg_text = alt.Chart(pd.DataFrame({
-        'x': [recent_pas_len - 1], 
+        'x': [x_max], 
         'y': [LEAGUE_AVG_XWOBA - 0.012], 
         'text': ['LG AVG']
     })).mark_text(
@@ -374,15 +390,30 @@ def xwOBA_graph(data: pd.DataFrame, max_rolling: int = DEFAULT_MAX_ROLLING) -> a
     # Create interpolated data for smooth tracking
     interpolated_df = create_interpolated_data(recent_pas)
     
+    # Calculate x-axis domain based on actual data range with small padding
+    x_min = recent_pas['pa_number'].min()
+    x_max = recent_pas['pa_number'].max()
+    
+    # Add small padding (5% on each side) to prevent line from touching edges
+    x_range = x_max - x_min
+    if x_range > 0:
+        padding = x_range * 0.05
+        x_min = max(0, x_min - padding)
+        x_max = x_max + padding
+    else:
+        # Handle edge case where there's only one data point
+        x_min = max(0, x_min - 1)
+        x_max = x_max + 1
+    
     # Create chart layers
-    line_chart = create_line_chart(recent_pas)
+    line_chart = create_line_chart(recent_pas, x_min, x_max)
     selector_rules, mouse_selection, points = create_selector_and_points(
-        interpolated_df, len(recent_pas)
+        interpolated_df, x_min, x_max
     )
     info_box, xwoba_text, date_text = create_info_box(
-        interpolated_df, mouse_selection, len(recent_pas)
+        interpolated_df, mouse_selection, x_min, x_max
     )
-    league_avg_line, league_avg_text = create_league_average_line(len(recent_pas))
+    league_avg_line, league_avg_text = create_league_average_line(x_max)
     
     # Combine all layers
     chart = (
@@ -638,19 +669,47 @@ def heat_map(df: pd.DataFrame):
         return
 
     df = df.copy()
-    df['batting_avg_label'] = df[avg_col].round(3)
 
     # Define explicit category orders for proper zone grid mapping
     x_order = ['Left', 'Middle', 'Right']
     y_order = ['High', 'Mid', 'Low']
 
-    # Calculate dynamic color scale based on actual data
-    min_avg = df[avg_col].min()
-    max_avg = df[avg_col].max()
-    mid_avg = df[avg_col].median()  # Use median as midpoint for better color distribution
+    # Create a complete grid with all 9 zones
+    all_zones = pd.DataFrame([
+        {'plate_x': x, 'plate_z': z}
+        for z in y_order
+        for x in x_order
+    ])
     
-    # Create heatmap with red-blue color scheme using dynamic scaling
-    heatmap = alt.Chart(df).mark_rect(stroke='black', strokeWidth=2).encode(
+    # Merge with actual data to fill in missing zones
+    df_complete = all_zones.merge(df, on=['plate_x', 'plate_z'], how='left')
+    
+    # Create display labels - show N/A for missing data
+    df_complete['batting_avg_label'] = df_complete[avg_col].apply(
+        lambda x: 'N/A' if pd.isna(x) else f'{x:.3f}'
+    )
+    
+    # For zones with data, also create numeric labels for tooltips
+    df_complete['has_data'] = df_complete[avg_col].notna()
+
+    # Calculate dynamic color scale based on actual data (excluding NaN)
+    valid_data = df_complete[df_complete['has_data']]
+    if len(valid_data) > 0:
+        min_avg = valid_data[avg_col].min()
+        max_avg = valid_data[avg_col].max()
+        mid_avg = valid_data[avg_col].median()
+    else:
+        # Defaults if no data at all
+        min_avg = 0.0
+        max_avg = 1.0
+        mid_avg = 0.5
+    
+    # Split data into zones with data and zones without
+    zones_with_data = df_complete[df_complete['has_data']]
+    zones_no_data = df_complete[~df_complete['has_data']]
+    
+    # Create heatmap for zones WITH data (red-blue color scheme)
+    heatmap_data = alt.Chart(zones_with_data).mark_rect(stroke='black', strokeWidth=2).encode(
         x=alt.X('plate_x:O',
                 sort=x_order,
                 title='Horizontal Distance (Catcher Perspective) [ft]',
@@ -674,12 +733,30 @@ def heat_map(df: pd.DataFrame):
         tooltip=[
             alt.Tooltip('plate_x:O', title='X Zone'),
             alt.Tooltip('plate_z:O', title='Z Zone'),
-            alt.Tooltip(f'{avg_col}:Q', title='Batting Average', format='.3f')
+            alt.Tooltip('batting_avg_label:N', title='Batting Average')
         ]
     )
+    
+    # Create heatmap for zones WITHOUT data (gray)
+    heatmap_no_data = alt.Chart(zones_no_data).mark_rect(
+        stroke='black', 
+        strokeWidth=2,
+        fill='#e0e0e0'
+    ).encode(
+        x=alt.X('plate_x:O', sort=x_order),
+        y=alt.Y('plate_z:O', sort=y_order),
+        tooltip=[
+            alt.Tooltip('plate_x:O', title='X Zone'),
+            alt.Tooltip('plate_z:O', title='Z Zone'),
+            alt.Tooltip('batting_avg_label:N', title='Batting Average')
+        ]
+    )
+    
+    # Combine both heatmap layers
+    heatmap = heatmap_no_data + heatmap_data
 
-    # Add text labels with dynamic color threshold
-    text = alt.Chart(df).mark_text(
+    # Add text labels for zones with data (white or black based on background)
+    text_data = alt.Chart(zones_with_data).mark_text(
         align='center',
         baseline='middle',
         fontSize=18,
@@ -687,13 +764,29 @@ def heat_map(df: pd.DataFrame):
     ).encode(
         x=alt.X('plate_x:O', sort=x_order),
         y=alt.Y('plate_z:O', sort=y_order),
-        text=alt.Text('batting_avg_label:Q', format='.3f'),
+        text='batting_avg_label:N',
         color=alt.condition(
-            f'datum.{avg_col} > {mid_avg}',  # Dynamic threshold based on median
+            f'datum.{avg_col} > {mid_avg}',
             alt.value('white'),
             alt.value('black')
         )
     )
+    
+    # Add text labels for zones without data (gray text for N/A)
+    text_no_data = alt.Chart(zones_no_data).mark_text(
+        align='center',
+        baseline='middle',
+        fontSize=18,
+        fontWeight='bold',
+        color='#666666'
+    ).encode(
+        x=alt.X('plate_x:O', sort=x_order),
+        y=alt.Y('plate_z:O', sort=y_order),
+        text='batting_avg_label:N'
+    )
+    
+    # Combine text layers
+    text = text_data + text_no_data
 
     # Combine and configure
     chart = (heatmap + text).properties(

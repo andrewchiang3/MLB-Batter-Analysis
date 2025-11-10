@@ -40,10 +40,50 @@ def is_mobile():
 
 def render_page_header():
     """Render the main page header with title and description"""
-    st.markdown(
-        "<h1 style='text-align: center;'>MLB Batter Analysis</h1>", 
-        unsafe_allow_html=True
-    )
+    if 'data' in st.session_state:
+        # Add custom CSS to make button look like a header
+        st.markdown("""
+            <style>
+            div.stButton > button[kind="secondary"] {
+                width: 100%;
+                background-color: transparent;
+                border: none;
+                color: inherit;
+                font-size: 3rem;
+                font-weight: 600;
+                padding: 0;
+                text-align: center;
+                cursor: pointer;
+                transition: color 0.2s;
+            }
+            div.stButton > button[kind="secondary"]:hover {
+                background-color: transparent;
+                border: none;
+                color: #1f77b4;
+            }
+            div.stButton > button[kind="secondary"]:focus {
+                background-color: transparent;
+                border: none;
+                box-shadow: none;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        # Clickable header button
+        if st.button("MLB Batter Analysis", key="header_home", type="secondary", use_container_width=True):
+            # Clear all session state
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            # Clear query params
+            st.query_params.clear()
+            st.rerun()
+    else:
+        # Regular title on startup page
+        st.markdown(
+            "<h1 style='text-align: center;'>MLB Batter Analysis</h1>", 
+            unsafe_allow_html=True
+        )
+    
     st.markdown(
         "<p style='text-align: center; color: gray; font-size: 14px;'>"
         "Analyze MLB player performance with Statcast data (2015-present). "
@@ -177,6 +217,13 @@ def load_player_data(player_name, start_date, end_date):
             st.session_state['player_name'] = player_name
             st.session_state['start_date'] = start_date
             st.session_state['end_date'] = end_date
+            
+            # Update query parameters to persist data on refresh
+            st.query_params.update({
+                'player': player_name,
+                'start': start_date.strftime('%Y-%m-%d'),
+                'end': end_date.strftime('%Y-%m-%d')
+            })
             
             st.success(f"Successfully loaded {len(data):,} pitches!")
             st.rerun()
@@ -361,6 +408,22 @@ def main():
     """Main application logic"""
     render_page_header()
     
+    # Check for query parameters to restore state after refresh
+    query_params = st.query_params
+    if ('player' in query_params and 'start' in query_params and 
+        'end' in query_params and 'data' not in st.session_state):
+        try:
+            player_name = query_params['player']
+            start_date = pd.to_datetime(query_params['start']).date()
+            end_date = pd.to_datetime(query_params['end']).date()
+            
+            # Reload data from query params
+            load_player_data(player_name, start_date, end_date)
+            return  # Let the rerun handle the rest
+        except Exception as e:
+            st.warning(f"Could not restore previous session: {e}")
+            st.query_params.clear()
+    
     # Check if data is loaded
     if 'data' not in st.session_state:
         render_initial_search_form()
@@ -382,7 +445,9 @@ def main():
             st.write("- Try expanding the date range")
             
             if st.button("← Start New Search", type="primary"):
-                del st.session_state['data']
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.query_params.clear()
                 st.rerun()
         else:
             # Display player info and stats
