@@ -396,12 +396,55 @@ def create_count_heatmap(count_df, stat='OPS', title='Performance by Count'):
     count_pattern = count_df[count_df['Split'].str.match(r'^\d-\d Count$', na=False)].copy()
     
     # Parse balls and strikes from the Split column
-    count_pattern[['Balls', 'Strikes']] = count_pattern['Split'].str.extract(r'(\d)-(\d)')
-    count_pattern['Balls'] = count_pattern['Balls'].astype(int)
-    count_pattern['Strikes'] = count_pattern['Strikes'].astype(int)
+    if len(count_pattern) > 0:
+        count_pattern[['Balls', 'Strikes']] = count_pattern['Split'].str.extract(r'(\d)-(\d)')
+        count_pattern['Balls'] = count_pattern['Balls'].astype(int)
+        count_pattern['Strikes'] = count_pattern['Strikes'].astype(int)
     
-    # Create the heatmap
-    heatmap = alt.Chart(count_pattern).mark_rect().encode(
+    # Create complete grid of all possible count combinations
+    all_counts = []
+    for balls in range(4):  # 0-3 balls
+        for strikes in range(3):  # 0-2 strikes
+            all_counts.append({
+                'Balls': balls,
+                'Strikes': strikes,
+                'Split': f'{balls}-{strikes} Count'
+            })
+    
+    complete_grid = pd.DataFrame(all_counts)
+    
+    # Merge with actual data
+    merged_data = complete_grid.merge(
+        count_pattern,
+        on=['Balls', 'Strikes', 'Split'],
+        how='left'
+    )
+    
+    # Create display label - show N/A for missing data
+    merged_data['stat_label'] = merged_data[stat].apply(
+        lambda x: 'N/A' if pd.isna(x) else f'{x:.3f}'
+    )
+    merged_data['has_data'] = merged_data[stat].notna()
+    
+    # Split into data with values and data without
+    data_with_values = merged_data[merged_data['has_data']]
+    data_without_values = merged_data[~merged_data['has_data']]
+    
+    # Calculate color scale based on actual data
+    if len(data_with_values) > 0:
+        stat_min = data_with_values[stat].min()
+        stat_max = data_with_values[stat].max()
+        stat_mid = data_with_values[stat].median()
+    else:
+        stat_min = 0.0
+        stat_max = 1.0
+        stat_mid = 0.5
+    
+    # Heatmap for cells WITH data
+    heatmap_data = alt.Chart(data_with_values).mark_rect(
+        stroke='black',
+        strokeWidth=2
+    ).encode(
         x=alt.X('Strikes:O', 
                title='Strikes',
                axis=alt.Axis(labelAngle=0)),
@@ -409,7 +452,10 @@ def create_count_heatmap(count_df, stat='OPS', title='Performance by Count'):
                title='Balls',
                sort='descending'),  # 0 balls at top, 3 at bottom
         color=alt.Color(f'{stat}:Q',
-                       scale=alt.Scale(scheme='redyellowgreen'),
+                       scale=alt.Scale(
+                           scheme='redyellowgreen',
+                           domain=[stat_min, stat_max]
+                       ),
                        legend=alt.Legend(title=stat)),
         tooltip=[
             alt.Tooltip('Split:N', title='Count'),
@@ -419,18 +465,27 @@ def create_count_heatmap(count_df, stat='OPS', title='Performance by Count'):
             alt.Tooltip('SLG:Q', title='SLG', format='.3f'),
             alt.Tooltip('OPS:Q', title='OPS', format='.3f')
         ]
-    ).properties(
-        width=400,
-        height=500,
-        title={
-            "text": title,
-            "fontSize": 16,
-            "fontWeight": "bold"
-        }
     )
     
-    # Add text labels showing the stat value
-    text = alt.Chart(count_pattern).mark_text(
+    # Heatmap for cells WITHOUT data (gray)
+    heatmap_no_data = alt.Chart(data_without_values).mark_rect(
+        stroke='black',
+        strokeWidth=2,
+        fill='#e0e0e0'
+    ).encode(
+        x=alt.X('Strikes:O', title='Strikes'),
+        y=alt.Y('Balls:O', sort='descending'),
+        tooltip=[
+            alt.Tooltip('Split:N', title='Count'),
+            alt.Tooltip('stat_label:N', title=stat)
+        ]
+    )
+    
+    # Combine heatmap layers
+    heatmap = heatmap_no_data + heatmap_data
+    
+    # Text labels for cells WITH data
+    text_data = alt.Chart(data_with_values).mark_text(
         fontSize=14,
         fontWeight='bold'
     ).encode(
@@ -438,12 +493,34 @@ def create_count_heatmap(count_df, stat='OPS', title='Performance by Count'):
         y=alt.Y('Balls:O', sort='descending'),
         text=alt.Text(f'{stat}:Q', format='.3f'),
         color=alt.condition(
-            alt.datum[stat] > 0.6,  # White text for darker cells
+            f'datum.{stat} > {stat_mid}',  # White text for higher values
             alt.value('white'),
             alt.value('black')
         )
     )
     
-    return (heatmap + text).configure_view(
+    # Text labels for cells WITHOUT data (N/A)
+    text_no_data = alt.Chart(data_without_values).mark_text(
+        fontSize=14,
+        fontWeight='bold',
+        color='#666666'
+    ).encode(
+        x=alt.X('Strikes:O'),
+        y=alt.Y('Balls:O', sort='descending'),
+        text='stat_label:N'
+    )
+    
+    # Combine text layers
+    text = text_data + text_no_data
+    
+    return (heatmap + text).properties(
+        width=400,
+        height=500,
+        title={
+            "text": title,
+            "fontSize": 16,
+            "fontWeight": "bold"
+        }
+    ).configure_view(
         strokeWidth=0
     )
