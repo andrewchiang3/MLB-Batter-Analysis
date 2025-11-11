@@ -1,9 +1,11 @@
 import pybaseball as pyb
 import pandas as pd
+import streamlit as st
 
 # Enable cache
 pyb.cache.enable()
 
+@st.cache_data(ttl=3600)
 def load_statcast_data(start_date, end_date):
     """Load Statcast data for the given date range with player names"""
     # Load the data
