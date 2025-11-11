@@ -303,7 +303,7 @@ def create_platoon_radar_chart(platoon_df):
         color=alt.Color('split:N',
                        scale=alt.Scale(domain=['vs LHP', 'vs RHP'],
                                      range=['#FF6B6B', '#4ECDC4']),
-                       legend=alt.Legend(title='Platoon Split')),
+                       legend=alt.Legend(title='Pitcher Handness')),
         order='order:O',
         detail='split:N'
     )
@@ -362,7 +362,7 @@ def create_platoon_radar_chart(platoon_df):
     chart = (guides + axes + area + line + points + labels).properties(
         width=500,
         height=500,
-        title='Platoon Splits Comparison'
+        title='Pitcher Handness Splits'
     ).configure_view(
         strokeWidth=0
     ).configure_axis(

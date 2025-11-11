@@ -614,7 +614,7 @@ def chase_rate(df: pd.DataFrame):
     metrics = calculate_chase_metrics(df)
     
     # Display overall discipline metrics
-    st.write("### Overall Discipline Metrics")
+    st.write("### Chase Rate Analysis")
     
     col1, col2, col3 = st.columns(3)
 

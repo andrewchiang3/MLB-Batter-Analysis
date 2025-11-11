@@ -5,6 +5,7 @@ import pandas as pd
 import altair as alt
 from pybaseball.plotting import plot_strike_zone
 from utils import count_at_bats
+import matplotlib.pyplot as plt
 
 def pitcher_matchup(player_data):
     """Pitcher vs batter matchup"""
@@ -40,28 +41,60 @@ def pitcher_matchup(player_data):
     
     st.write(f"## {st.session_state['player_name']} vs {selected_pitcher_name}")
 
-    # Summary metrics
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
+    # Calculate comprehensive stats
     total_pitches = len(matchup_data)
-    at_bats = count_at_bats(matchup_data)
     
     # Count outcomes
     outcomes = matchup_data[matchup_data['events'].notna()]
-    strikeouts = len(outcomes[outcomes['events'].str.contains('strikeout', na=False)])
-    walks = len(outcomes[outcomes['events'].str.contains('walk', na=False)])
+    
+    # Calculate at-bats and hits
+    at_bats = count_at_bats(matchup_data)
     hits = len(outcomes[outcomes['events'].isin(['single', 'double', 'triple', 'home_run'])])
+    singles = len(outcomes[outcomes['events'] == 'single'])
+    doubles = len(outcomes[outcomes['events'] == 'double'])
+    triples = len(outcomes[outcomes['events'] == 'triple'])
+    home_runs = len(outcomes[outcomes['events'] == 'home_run'])
+    
+    # Calculate walks and other outcomes
+    walks = len(outcomes[outcomes['events'].str.contains('walk', na=False)])
+    hbp = len(outcomes[outcomes['events'].isin(['hit_by_pitch'])])
+    sac_flies = len(outcomes[outcomes['events'].isin(['sac_fly', 'sac_fly_double_play'])])
+    strikeouts = len(outcomes[outcomes['events'].str.contains('strikeout', na=False)])
+    
+    # Calculate batting line stats
+    avg = hits / at_bats if at_bats > 0 else 0
+    obp = (hits + walks + hbp) / (at_bats + walks + hbp + sac_flies) if (at_bats + walks + hbp + sac_flies) > 0 else 0
+    total_bases = singles + (2 * doubles) + (3 * triples) + (4 * home_runs)
+    slg = total_bases / at_bats if at_bats > 0 else 0
+    ops = obp + slg
+
+    # Summary metrics - First row
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
         st.metric("Total Pitches", total_pitches)
     with col2:
-        st.metric("At-Bats", at_bats)
+        st.metric("Matchup Record", f"{hits}-for-{at_bats}", help="Hits vs At-Bats in this matchup")
     with col3:
-        st.metric("Strikeouts", strikeouts)
+        st.metric("H", hits, help=f"1B: {singles} 2B: {doubles} 3B: {triples}")
     with col4:
-        st.metric("Hits", hits)
+        st.metric("Home Runs", home_runs)
     with col5:
         st.metric("Walks", walks)
+    with col6:
+        st.metric("Strikeouts", strikeouts)
+    
+    # Batting line stats - Second row
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("AVG", f"{avg:.3f}", help="Batting Average")
+    with col2:
+        st.metric("OBP", f"{obp:.3f}", help="On-Base Percentage")
+    with col3:
+        st.metric("SLG", f"{slg:.3f}", help="Slugging Percentage")
+    with col4:
+        st.metric("OPS", f"{ops:.3f}", help="On-Base Plus Slugging")
 
     st.write("### Matchup Summary")
         
@@ -132,21 +165,36 @@ def pitcher_matchup(player_data):
                 ])
             ]
             
-            if len(matchup_outs) > 0:
+            # Filter out pitch types that pybaseball doesn't recognize
+            # Known issue: CS (Slow Curve) and some other rare pitch types cause KeyError
+            unsupported_pitch_types = ['CS', 'SC', 'UN', 'AB', 'PO']
+            matchup_outs_filtered = matchup_outs[
+                ~matchup_outs['pitch_type'].isin(unsupported_pitch_types)
+            ]
+            
+            if len(matchup_outs_filtered) > 0:
                 try:
                     ax = plot_strike_zone(
-                        matchup_outs,
-                        title=f"Out Locations\n({len(matchup_outs)} outs)",
+                        matchup_outs_filtered,
+                        title=f"Out Locations\n({len(matchup_outs_filtered)} outs)",
                         colorby='pitch_type',
                         annotation=None
                     )
 
                     fig = ax.get_figure()
                     st.pyplot(fig)
+                    
+                    # Show note if we filtered out some pitches
+                    filtered_count = len(matchup_outs) - len(matchup_outs_filtered)
+                    if filtered_count > 0:
+                        st.caption(f"Note: {filtered_count} pitch(es) with unsupported type excluded")
                 except Exception as e:
                     st.error(f"Error creating plot: {e}")
             else:
-                st.info("No outs in this matchup yet")
+                if len(matchup_outs) > 0:
+                    st.info(f"All {len(matchup_outs)} outs used unsupported pitch types")
+                else:
+                    st.info("No outs in this matchup yet")
 
     st.write("### At-Bat History")
     st.write('**See pitch sequences for each at-bat**')
@@ -202,14 +250,33 @@ def pitcher_matchup(player_data):
                             if pd.notna(pitch['events']):
                                 title += f"\n**{pitch['events'].upper()}**"
                             
-                            # Let plot_strike_zone create the plot
-                            ax = plot_strike_zone(single_pitch, title=title, 
-                                                colorby='pitch_type', annotation='release_speed')
+                            # Check if this pitch type is supported by pybaseball
+                            unsupported_pitch_types = ['CS', 'SC', 'UN', 'AB', 'PO']
+                            pitch_type = pitch.get('pitch_type', '')
                             
-                            # Get the figure from the axes
-                            fig = ax.get_figure()
-                            
-                            # Display in this column
-                            st.pyplot(fig)
+                            if pitch_type in unsupported_pitch_types:
+                                # Display pitch info as text for unsupported types
+                                st.write(f"**{title}**")
+                                st.write(f"Speed: {pitch.get('release_speed', 'N/A')} mph")
+                                st.caption(f"(Pitch type '{pitch_type}' not supported in visualization)")
+                            elif pd.notna(pitch.get('plate_x')) and pd.notna(pitch.get('plate_z')):
+                                try:
+                                    # Use pybaseball's plot_strike_zone
+                                    ax = plot_strike_zone(single_pitch, title=title, 
+                                                        colorby='pitch_type', annotation='release_speed')
+                                    
+                                    fig = ax.get_figure()
+                                    st.pyplot(fig)
+                                    plt.close(fig)
+                                except Exception as e:
+                                    # Fallback if plotting fails
+                                    st.write(f"**{title}**")
+                                    st.write(f"Speed: {pitch.get('release_speed', 'N/A')} mph")
+                                    st.caption(f"(Error plotting: {str(e)})")
+                            else:
+                                # No location data available
+                                st.write(f"**{title}**")
+                                st.write(f"Speed: {pitch.get('release_speed', 'N/A')} mph")
+                                st.caption("(Location data not available)")
                             
                             pitch_num += 1
